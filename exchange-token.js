@@ -1,14 +1,10 @@
 const { client } = require('./_plaidClient');
 const { appendStoredToken } = require('./_sheets');
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
-module.exports = async (req, res) => {
-  setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
 
@@ -18,10 +14,7 @@ module.exports = async (req, res) => {
   try {
     const exchange = await client.itemPublicTokenExchange({ public_token });
     const accessToken = exchange.data.access_token;
-
-    // Store the access token in your private Google Sheet tab
     await appendStoredToken(institution_name || 'Unknown institution', accessToken);
-
     res.status(200).json({ success: true, institution: institution_name });
   } catch (err) {
     console.error('exchange-token error:', err.response?.data || err.message);

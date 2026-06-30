@@ -1,14 +1,10 @@
 const { client } = require('./_plaidClient');
 const { getAllStoredTokens } = require('./_sheets');
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
-module.exports = async (req, res) => {
-  setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
@@ -18,7 +14,6 @@ module.exports = async (req, res) => {
     }
 
     const allAccounts = [];
-
     for (const { institution, accessToken } of tokens) {
       try {
         const balResponse = await client.accountsBalanceGet({ access_token: accessToken });
@@ -39,7 +34,6 @@ module.exports = async (req, res) => {
         allAccounts.push({ institution, error: 'Failed to fetch — token may need refresh' });
       }
     }
-
     res.status(200).json({ accounts: allAccounts });
   } catch (err) {
     console.error('get-balances error:', err.response?.data || err.message);
