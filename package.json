@@ -1,0 +1,9 @@
+{
+  "name": "givens-finances-plaid-server",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "plaid": "^21.0.0",
+    "googleapis": "^140.0.0"
+  }
+}
