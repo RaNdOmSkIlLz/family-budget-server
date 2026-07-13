@@ -1,0 +1,3509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>Givens Family Finances</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Family $">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script src="https://accounts.google.com/gsi/client"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f2f2f7;color:#1c1c1e;padding:16px 16px 48px}
+h1{font-size:20px;font-weight:700;margin-bottom:4px}
+.subtitle{font-size:13px;color:#6e6e73;margin-bottom:14px}
+/* TABS */
+.tabs{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:7px 13px;border-radius:20px;border:1.5px solid #d1d1d6;background:#fff;font-size:13px;font-weight:500;color:#3a3a3c;cursor:pointer;white-space:nowrap}
+.tab.active{background:#007aff;border-color:#007aff;color:#fff}
+.view{display:none}.view.active{display:block}
+/* AUTH */
+#authScreen{text-align:center;padding:40px 20px}
+#authScreen h2{font-size:20px;font-weight:600;margin-bottom:12px}
+#authScreen p{font-size:14px;color:#6e6e73;margin-bottom:24px;line-height:1.6}
+.btn-primary{background:#007aff;color:#fff;border:none;border-radius:14px;padding:14px 32px;font-size:16px;font-weight:600;cursor:pointer;width:100%}
+.btn-secondary{background:#f2f2f7;color:#3a3a3c;border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer}
+/* LOADING */
+#loadingScreen{text-align:center;padding:60px 20px;display:none}
+.spinner{width:36px;height:36px;border:3px solid #e5e5ea;border-top-color:#007aff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* SYNC BAR */
+.sync-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sync-info{display:flex;align-items:center;gap:6px;font-size:12px;color:#8e8e93}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex-shrink:0}
+.sync-dot.syncing{background:#ff9500;animation:pulse 1s infinite}
+.sync-dot.error{background:#ff3b30}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* MONTH NAV */
+.month-nav{display:flex;align-items:center;gap:6px;margin-bottom:16px}
+.month-chevron{background:#fff;border:1.5px solid #d1d1d6;border-radius:20px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0;color:#3a3a3c}
+.month-chevron:disabled{opacity:.3;cursor:default}
+.month-scroll{display:flex;gap:6px;overflow:hidden;flex:1}
+.month-btn{flex-shrink:0;padding:7px 12px;border-radius:20px;border:1.5px solid #d1d1d6;background:#fff;font-size:12px;font-weight:500;color:#3a3a3c;cursor:pointer;white-space:nowrap}
+.month-btn.active{background:#007aff;border-color:#007aff;color:#fff}
+.month-btn.past{opacity:.6}
+.add-month-btn{flex-shrink:0;padding:7px 12px;border-radius:20px;border:1.5px dashed #007aff;background:transparent;font-size:12px;font-weight:500;color:#007aff;cursor:pointer;white-space:nowrap}
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.card{background:#fff;border-radius:12px;padding:12px 10px;text-align:center}
+.card4{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.card2{background:#fff;border-radius:12px;padding:14px 12px}
+.card2.full{grid-column:1/-1}
+.card-label{font-size:11px;color:#6e6e73;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.card-value{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.card-sub{font-size:12px;color:#8e8e93;margin-top:3px}
+/* COLORS */
+.green{color:#34c759}.blue{color:#007aff}.orange{color:#ff9500}.purple{color:#af52de}.red{color:#ff3b30}
+/* SECTIONS */
+.section{background:#fff;border-radius:14px;margin-bottom:14px;overflow:visible}
+.block{background:#fff;border-radius:14px;margin-bottom:14px;overflow:hidden}
+.sec-hdr,.block-header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #f2f2f7;border-radius:14px 14px 0 0}
+.sec-accent,.accent{width:4px;height:20px;border-radius:2px;flex-shrink:0}
+.sec-title,.block-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#3a3a3c}
+.block-title{text-transform:none;font-size:14px}
+.sec-meta{margin-left:auto;display:flex;align-items:center;gap:8px}
+.badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px}
+.badge-green{background:#d1f4d9;color:#1a7f37}.badge-orange{background:#fff3cd;color:#9a6700}
+.badge-blue{background:#ddeeff;color:#0055cc}.badge-purple{background:#f0e6ff;color:#6600cc}
+/* CATEGORY ROW */
+.cat-row{border-bottom:1px solid #f9f9f9;background:#fff;position:relative}
+.cat-row:last-child{border-bottom:none}
+.cat-row.closed-row{background:#fafafa}
+.cat-row.sinking-row{background:#f6fff8}
+.cat-header{display:flex;align-items:center;padding:10px 16px;gap:8px;cursor:pointer;user-select:none}
+.cat-chevron{font-size:13px;color:#8e8e93;transition:transform .2s;flex-shrink:0}
+.cat-chevron.open{transform:rotate(180deg)}
+.cat-name{flex:1;font-size:14px;font-weight:500;color:#1c1c1e}
+.cat-badges{display:flex;gap:4px;flex-shrink:0}
+.flag{font-size:10px;padding:2px 5px;border-radius:6px;font-weight:600}
+.flag-sf{background:#d1f4d9;color:#1a7f37}
+.flag-closed{background:#e5e5ea;color:#6e6e73}
+.flag-over{background:#ffe0e0;color:#c0392b}
+.txn-count{font-size:10px;background:#f2f2f7;color:#6e6e73;padding:2px 6px;border-radius:8px;font-weight:600}
+.cat-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.cat-budget-input{font-size:12px;color:#8e8e93;font-variant-numeric:tabular-nums;background:none;border:none;text-align:right;width:72px;cursor:pointer;padding:0}
+.cat-budget-input:focus{background:#f2f2f7;border-radius:6px;outline:none;color:#1c1c1e;padding:2px 4px}
+.cat-actual{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.cat-var{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+.var-over{color:#ff3b30}.var-under{color:#34c759}.var-exact{color:#8e8e93}
+/* CAT BODY */
+.cat-body{display:none;border-top:1px solid #f9f9f9;position:relative;z-index:1}
+.cat-body.open{display:block}
+/* PROGRESS BAR */
+.cat-bar{height:3px;background:#e5e5ea;margin:0 16px}
+.cat-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+/* CAT ACTIONS */
+.cat-actions{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;gap:8px}
+.cat-actions-left{display:flex;gap:6px;flex-wrap:wrap}
+.cat-actions-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.btn-xs{padding:5px 11px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-add{background:#007aff;color:#fff}
+.btn-spent{background:#e5e5ea;color:#6e6e73;font-size:11px;padding:4px 10px}
+.btn-spent.done{background:#34c759;color:#fff}
+.btn-cover{background:#ff9500;color:#fff}
+/* THREE DOT MENU */
+.menu-wrap{position:relative}
+.btn-menu{background:none;border:none;font-size:18px;color:#8e8e93;cursor:pointer;padding:0 4px;line-height:1}
+.dropdown{display:none;position:absolute;right:0;top:24px;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:180px;z-index:200;overflow:hidden}
+.dropdown.open{display:block}
+.dd-item{display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:14px;color:#1c1c1e;cursor:pointer;border-bottom:1px solid #f2f2f7}
+.dd-item:last-child{border-bottom:none}
+.dd-item:hover{background:#f9f9f9}
+.dd-icon{font-size:16px;width:20px;text-align:center}
+/* TRANSACTIONS */
+.txn-list{padding:4px 16px 10px;position:relative;z-index:2}
+.txn{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f9f9f9;font-size:13px}
+.txn:last-child{border-bottom:none}
+.txn-icon{font-size:10px;padding:2px 5px;border-radius:5px;background:#f2f2f7;color:#6e6e73;flex-shrink:0}
+.txn-desc{flex:1;color:#3a3a3c}
+.txn-amt{font-weight:500;font-variant-numeric:tabular-nums}
+.txn-del{background:none;border:none;color:#ff3b30;font-size:16px;cursor:pointer;padding:0 2px;flex-shrink:0}
+.sub-note{font-size:11px;padding:4px 16px 8px;color:#8e8e93}
+.sub-note.good{color:#34c759}.sub-note.warn{color:#ff9500}
+/* BANNERS */
+.surplus-banner{background:#fff9e6;border-left:4px solid #ff9500;border-radius:0 10px 10px 0;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#9a6700;line-height:1.5}
+.raise-banner{background:#f0fff4;border-left:4px solid #34c759;border-radius:0 10px 10px 0;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1a7f37}
+/* MODALS */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:17px;font-weight:600;margin-bottom:16px}
+.modal label{font-size:13px;color:#6e6e73;display:block;margin-bottom:4px;margin-top:10px}
+.modal input,.modal select{width:100%;border:1.5px solid #d1d1d6;border-radius:10px;padding:11px 14px;font-size:16px;outline:none;background:#fff}
+.modal input:focus,.modal select:focus{border-color:#007aff}
+.modal-btns{display:flex;gap:10px;margin-top:16px}
+.modal-btns button{flex:1;padding:12px;border-radius:12px;border:none;font-size:15px;font-weight:600;cursor:pointer}
+.btn-cancel{background:#f2f2f7;color:#3a3a3c}
+.btn-save{background:#007aff;color:#fff}
+/* SPLIT ROWS */
+.split-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.split-row select{flex:1;min-width:0;font-size:14px;padding:8px 10px}
+.split-row input{width:88px;flex-shrink:0;font-size:14px;padding:8px 10px}
+.split-row button{background:none;border:none;color:#ff3b30;font-size:20px;cursor:pointer;flex-shrink:0;padding:0 2px}
+.split-remaining{font-size:13px;font-weight:600;text-align:right;margin-bottom:10px}
+/* MISC */
+.note{background:#fff9e6;border-left:4px solid #ff9500;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#3a3a3c;line-height:1.6}
+.note b{color:#9a6700}
+.note-blue{background:#e8f4ff;border-left:4px solid #007aff;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#3a3a3c;line-height:1.6}
+.note-blue b{color:#0055cc}
+.note-green{background:#f0fff4;border-left:4px solid #34c759;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#3a3a3c;line-height:1.6}
+.note-green b{color:#1a7f37}
+.divider{font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.05em;padding:4px 0 8px;font-weight:600}
+.row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #f2f2f7}
+.row:last-child{border-bottom:none}
+.row-label{font-size:15px;color:#3a3a3c}
+.row-sub{font-size:12px;color:#8e8e93;margin-top:2px}
+.row-val{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.row-val-sub{font-size:12px;color:#8e8e93;margin-top:2px;text-align:right}
+.alloc-total{display:flex;justify-content:space-between;padding:14px 16px;background:#f2f2f7;font-weight:600;font-size:15px}
+/* RETIREMENT */
+.ret-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.ret-card{background:#fff;border-radius:12px;padding:12px 8px;text-align:center}
+.ret-age{font-size:11px;color:#6e6e73;margin-bottom:4px}
+.ret-val{font-size:15px;font-weight:700;color:#007aff}
+.progress-wrap{padding:0 16px 14px}
+.progress-labels{display:flex;justify-content:space-between;font-size:12px;color:#8e8e93;margin-bottom:4px}
+.bar-bg2{background:#e5e5ea;border-radius:6px;height:8px;overflow:hidden}
+.ss-btn{flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid #d1d1d6;background:#fff;font-size:14px;font-weight:500;color:#3a3a3c;cursor:pointer}
+.ss-btn.ss-active{background:#007aff;border-color:#007aff;color:#fff}
+/* DRAG AND DROP */
+.cat-drop-zone{display:none;padding:6px 16px;margin:2px 8px;border:2px dashed #d1d1d6;border-radius:8px;text-align:center;font-size:11px;color:#c7c7cc;transition:all .15s}
+.dragging-active .cat-drop-zone{display:block}
+.cat-drop-zone.drag-over{border-color:#007aff;background:#e8f4ff;color:#007aff}
+[draggable=true]{cursor:grab}
+[draggable=true]:active{cursor:grabbing}
+
+.proj-table{background:#fff;border-radius:14px;overflow:hidden;margin-bottom:14px}
+.proj-row{display:flex;padding:10px 12px;border-bottom:1px solid #f2f2f7;align-items:center}
+.proj-row:last-child{border-bottom:none}
+.proj-row.hdr{background:#f9f9f9;font-size:10px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:.04em}
+.proj-row.raise{background:#f0fff4}
+.proj-month{flex:0 0 64px;font-size:13px;font-weight:500}
+.proj-income,.proj-exp,.proj-sav{flex:1;font-size:13px;font-variant-numeric:tabular-nums}
+.proj-rem{flex:1;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+  <div style="font-size:48px;margin-bottom:16px">💰</div>
+  <h2>Givens Family Finances</h2>
+  <p>Sign in with Google to access your budget and financial plan.</p>
+  <button class="btn-primary" onclick="signIn()">Sign in with Google</button>
+  <p style="font-size:12px;color:#8e8e93;margin-top:16px">Your data stays private in your Google Drive.</p>
+</div>
+
+<!-- LOADING SCREEN -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p id="loadingMsg" style="font-size:14px;color:#6e6e73">Loading...</p>
+  <p id="loadingError" style="font-size:13px;color:#ff3b30;margin-top:12px;padding:0 20px;display:none"></p>
+  <button id="loadingSignOutBtn" onclick="forceSignOut()" style="display:none;margin-top:16px;background:#f2f2f7;color:#3a3a3c;border:none;border-radius:12px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer">Sign out and try again</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+  <div class="sync-bar">
+    <h1>Givens Family Finances</h1>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="sync-info"><div class="sync-dot" id="syncDot"></div><span id="syncStatus">Saved</span></div>
+      <button class="btn-secondary" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('tracker',this)">Budget Overview</div>
+    <div class="tab" onclick="showTab('monthly',this)">Monthly</div>
+    <div class="tab" onclick="showTab('projection',this)">Projection</div>
+    <div class="tab" onclick="showTab('snapshot',this)">Snapshot</div>
+    <div class="tab" onclick="showTab('windfall',this)">Windfall</div>
+    <div class="tab" onclick="showTab('retirement',this)">Retirement</div>
+    <div class="tab" onclick="showTab('goals',this)">Goals</div>
+    <div class="tab" onclick="showTab('insights',this)">Insights</div>
+  </div>
+
+  <!-- TRACKER VIEW -->
+  <div class="view active" id="tracker">
+    <div class="month-nav" id="monthNav"></div>
+    <div class="cards" id="trackerCards"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px" id="syncTxnRow"></div>
+    <div id="pendingQueue"></div>
+    <div id="surplusBanner"></div>
+    <div id="trackerSections"></div>
+  </div>
+
+  <!-- MONTHLY VIEW -->
+  <div class="view" id="monthly">
+    <div class="month-nav" id="monthlyNav"></div>
+    <p class="subtitle" id="monthlyIncome" style="margin-bottom:14px"></p>
+    <div class="cards" id="monthlyCards"></div>
+    <div id="monthlyBanner"></div>
+    <div id="monthlySections"></div>
+    <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:14px" id="monthlyBar"></div>
+  </div>
+
+  <!-- PROJECTION VIEW -->
+  <div class="view" id="projection">
+    <p style="font-size:13px;color:#6e6e73;margin-bottom:16px">Jun 2026 – Jul 2027 plan · Raises applied Jan &amp; Jun 2027</p>
+    <div class="proj-table">
+      <div class="proj-row hdr">
+        <div class="proj-month">Month</div>
+        <div class="proj-income">Income</div>
+        <div class="proj-exp">Expenses</div>
+        <div class="proj-sav">Savings</div>
+        <div class="proj-rem">Left</div>
+      </div>
+      <div id="projRows"></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:14px" id="projSummary"></div>
+  </div>
+
+  <!-- OTHER VIEWS -->
+  <div class="view" id="snapshot"><div id="snapshotContent"></div></div>
+  <div class="view" id="windfall"><div id="windfallContent"></div></div>
+  <div class="view" id="retirement"><div id="retirementContent"></div></div>
+  <div class="view" id="goals"><div id="goalsContent"></div></div>
+  <div class="view" id="insights"><div id="insightsContent"></div></div>
+</div>
+
+<!-- ADD/SPLIT TRANSACTION MODAL -->
+<div class="modal-bg" id="modalAdd">
+  <div class="modal">
+    <h3 id="modalAddTitle">Add transaction</h3>
+    <label>Amount</label>
+    <div id="addRows"></div>
+    <div class="split-remaining" id="addRemaining" style="display:none"></div>
+    <label style="margin-top:10px">Description</label>
+    <input type="text" id="addDesc" placeholder="e.g. HEB groceries" autocomplete="off"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();saveAdd()}">
+    <button class="btn-secondary" style="width:100%;margin:8px 0" onclick="addSplitRow(null,null)">+ Add another category</button>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveAdd()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DROPDOWN OVERLAY -->
+<div id="ddOverlay" style="display:none;position:fixed;inset:0;z-index:49" onclick="closeAllDropdowns()"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const CLIENT_ID = '405165249389-5l1b5qgvle2usoi9339tva7hsdp0it87.apps.googleusercontent.com';
+const BUDGET_SHEET_ID = '1D_XgQLNrHjhiXB-CYofe1ebRZ_EZNn45f9r4Ep0nolg';
+const PLAN_SHEET_ID = '104QB8VvA_S40JQtfCdHeln2WsamoenJFSblBzAQGuDg';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const PLAID_SERVER = 'https://family-budget-server.vercel.app';
+const WINDOW_SIZE = 6;
+const SAVING_SECTIONS = ['529s', 'Kids Cars & Weddings', 'Savings Goals'];
+
+const MONTH_KEYS_BASE = [
+  'Jun26','Jul26','Aug26','Sep26','Oct26','Nov26','Dec26',
+  'Jan27','Feb27','Mar27','Apr27','May27','Jun27','Jul27'
+];
+
+const BASE_MONTHS = [
+  {key:'Jun26', label:"Jun '26", year:2026, month:6},
+  {key:'Jul26', label:"Jul '26", year:2026, month:7},
+  {key:'Aug26', label:"Aug '26", year:2026, month:8},
+  {key:'Sep26', label:"Sep '26", year:2026, month:9},
+  {key:'Oct26', label:"Oct '26", year:2026, month:10},
+  {key:'Nov26', label:"Nov '26", year:2026, month:11},
+  {key:'Dec26', label:"Dec '26", year:2026, month:12},
+  {key:'Jan27', label:"Jan '27", year:2027, month:1},
+  {key:'Feb27', label:"Feb '27", year:2027, month:2},
+  {key:'Mar27', label:"Mar '27", year:2027, month:3},
+  {key:'Apr27', label:"Apr '27", year:2027, month:4},
+  {key:'May27', label:"May '27", year:2027, month:5},
+  {key:'Jun27', label:"Jun '27", year:2027, month:6},
+  {key:'Jul27', label:"Jul '27", year:2027, month:7},
+];
+
+const SS = {
+  eric:   {today:{65:3601, 67:4155, 70:5152},  future:{65:7189, 67:8715,  70:11638}, claimYear:{65:2054,67:2056,70:2059}, age:70},
+  mattie: {today:{65:2466, 67:2845, 70:3528},  future:{65:5046, 67:6117,  70:8168},  claimYear:{65:2055,67:2057,70:2060}, age:65}
+};
+
+const ACCOUNT_MAP = {
+  '645034227': {subtype:'roth',      label:'Fidelity Roth IRA'},
+  '645198090': {subtype:'brokerage', label:'Fidelity Brokerage'},
+  '618366586': {subtype:'529',       label:'Kinsley 529', child:'Kinsley'},
+  '618440858': {subtype:'529',       label:'Kyle 529',    child:'Kyle'},
+  '603504945': {subtype:'529',       label:'Collins 529', child:'Collins'},
+};
+
+const MERCHANT_RULES = [
+  {pattern:/heb|kroger|randalls|whole foods|costco|sams club|walmart|target|aldi|trader joe|sprouts/i,           cat:'Groceries'},
+  {pattern:/chick.fil|mcdonald|starbucks|chipotle|whataburger|domino|pizza|taco bell|subway|wendy|burger king|sushi|restaurant|grill|cafe|north italia|torchy|cane/i, cat:'Dining out'},
+  {pattern:/spectrum|att|at&t|verizon|t.mobile|comcast/i,                                                       cat:'Internet'},
+  {pattern:/hoa|homeowner/i,                                                                                     cat:'HOA'},
+  {pattern:/lawn|mow|landscap/i,                                                                                 cat:'Lawn care'},
+  {pattern:/home depot|lowes|ace hardware/i,                                                                     cat:'Home expenses'},
+  {pattern:/daycare|kindercare|learning tree|bright horizons/i,                                                  cat:'Daycare'},
+  {pattern:/shell|exxon|chevron|bp |texaco|murphy|racetrac|valero|quiktrip|qt |7-eleven| gas$| gas #| fuel$/i,       cat:'Gas/fuel'},
+  {pattern:/netflix|hulu|disney\+|spotify|youtube premium|hbo|paramount\+|apple tv\+|peacock/i,                  cat:'Streaming'},
+  {pattern:/la fitness|planet fitness|lifetime|equinox|anytime fitness|orangetheory|crunch|ymca/i,              cat:'Gym'},
+  {pattern:/toll|txdot|ntta|ez tag|pikepass/i,                                                                   cat:'Toll roads'},
+  {pattern:/hair|salon|barber|great clips|sport clips/i,                                                         cat:'Haircuts'},
+  {pattern:/groomer|petsmart|petco/i,                                                                            cat:'Grooming'},
+  {pattern:/chewy|hills science|blue buffalo/i,                                                                   cat:'Pet food & misc'},
+  {pattern:/tithe|church|donation|ministry/i,                                                                    cat:'Tithe'},
+  {pattern:/life insurance|term life/i,                                                                          cat:'Life insurance'},
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let accessToken = null, tokenClient;
+let budgetPlan = [];
+let trackerBudgets = {};
+let planConfig = {};
+let trackerData = {state:{}, transactions:{}, sinkingFunds:{}, splitGroups:{}, confirmedPlaidIds: new Set()};
+let merchantMap = {};
+let pendingTxns = [];
+let months = [...BASE_MONTHS];
+let windowStart = 0;
+let trackerIdx = 0;
+let monthlyIdx = 0;
+let expandedCats = new Set();
+let collapsedSections = new Set();
+let snapshotCollapsed = {retirement:true, roth:true, '401k':true, brokerage:true, hsa:true, '529':true, kinsley529:true, kyle529:true, collins529:true};
+let modalCtx = null;
+let syncTimer = null;
+let plaidLoaded = false;
+let windfallLog = [];      // [{year, date, source, amount, notes}]
+let windfallYears = [];    // [2026, 2027, ...]
+let windfallYearIdx = 0;   // currently selected year tab
+let balanceHistory = [];   // [{date, account, type, balance, parsedDate}]
+let lastInsights = null;   // persists until next Analyze click
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const fmt = n => '$' + (Math.abs(n) || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtSigned = n => { if (n === null || n === undefined) return ''; if (Math.abs(n) < 0.005) return '✓'; return (n > 0 ? '+' : '') + fmt(n); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const mk = idx => months[idx]?.key || '';
+
+function getMonthNames() {
+  return ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+}
+
+function nextMonth(last) {
+  const n = getMonthNames();
+  let m = last.month + 1, y = last.year;
+  if (m > 12) { m = 1; y++; }
+  return { key: n[m] + String(y).slice(2), label: n[m] + " '" + String(y).slice(2), year: y, month: m };
+}
+
+// incomeConfig loaded from Income tab — array of {person, biweekly, effectiveDate}
+let incomeConfig = [];
+
+function getIncome(idx) {
+  const mo = months[idx];
+  if (!mo) return {eric:0, mattie:0, total:0};
+
+  // Budgeting approach:
+  // Eric:  biweekly × 26/12 (true monthly average — his extra checks aren't treated as windfall)
+  // Mattie: biweekly × 2   (budgeted as 2 paychecks/month; the 2 extra/yr go to windfall)
+
+  if (!incomeConfig.length) {
+    // Fallback defaults — both bimonthly ×2
+    const eric   = 5678.35 * 2;
+    const mattie = 2574.19 * 2;
+    return {eric, mattie, total: eric + mattie};
+  }
+
+  const monthEnd = new Date(mo.year, mo.month, 0);
+
+  function rateForPerson(person) {
+    const rates = incomeConfig
+      .filter(r => r.person.toLowerCase() === person.toLowerCase())
+      .sort((a, b) => new Date(a.effectiveDate) - new Date(b.effectiveDate));
+    if (!rates.length) return 0;
+
+    // For months where a new rate takes effect mid-month (e.g. Jun26 for Mattie),
+    // average the rates that are active during this month
+    const monthStart = new Date(mo.year, mo.month - 1, 1);
+    const inMonth = rates.filter(r => {
+      const ed = new Date(r.effectiveDate);
+      return ed >= monthStart && ed <= monthEnd;
+    });
+
+    if (inMonth.length > 1) {
+      // Blended month — average the biweekly amounts
+      return inMonth.reduce((s, r) => s + r.biweekly, 0) / inMonth.length;
+    }
+
+    // Find most recent rate effective on or before this month
+    const applicable = rates.filter(r => new Date(r.effectiveDate) <= monthEnd);
+    if (!applicable.length) return rates[0].biweekly;
+    return applicable[applicable.length - 1].biweekly;
+  }
+
+  const ericBiweekly   = rateForPerson('Eric');
+  const mattieBiweekly = rateForPerson('Mattie');
+
+  // Both Eric and Mattie budgeted as bimonthly (2 paychecks/month)
+  // Extra paychecks (Eric gets 2 extra/yr, Mattie gets 2 extra/yr) go to windfall
+  let eric   = ericBiweekly * 2;
+  let mattie = mattieBiweekly * 2;
+
+  // Apply scheduled raises
+  if (mo.year > 2027 || (mo.year === 2027 && mo.month >= 1))  eric   *= 1.03;
+  if (mo.year > 2027 || (mo.year === 2027 && mo.month >= 6))  mattie *= 1.035;
+
+  return {eric, mattie, total: eric + mattie};
+}
+
+function getBudget(idx, cat) {
+  const k = mk(idx);
+  if (trackerBudgets[k] && trackerBudgets[k][cat] !== undefined) return trackerBudgets[k][cat];
+  const row = budgetPlan.find(r => r.Category === cat);
+  if (!row) return 0;
+  if (idx < BASE_MONTHS.length) return row.amounts[k] || 0;
+  return row.amounts['Jul27'] || 0;
+}
+
+function getPlanBudget(idx, cat) {
+  const row = budgetPlan.find(r => r.Category === cat);
+  if (!row) return 0;
+  const k = mk(idx);
+  if (idx < BASE_MONTHS.length) return row.amounts[k] || 0;
+  return row.amounts['Jul27'] || 0;
+}
+
+function detectCurrentMonthIdx() {
+  const today = new Date();
+  const ty = today.getFullYear(), tm = today.getMonth() + 1;
+  const idx = months.findIndex(m => m.year === ty && m.month === tm);
+  if (idx !== -1) return idx;
+  const first = months[0];
+  if (ty < first.year || (ty === first.year && tm < first.month)) return 0;
+  return months.length - 1;
+}
+
+function getAccountMapping(acct) {
+  // Try matching by account number fragments in name/officialName
+  const rawName = (acct.officialName || acct.name || '');
+  const name = rawName.replace(/\s/g, '');
+  const mask = (acct.mask || '').replace(/\s/g, '');
+
+  for (const [key, map] of Object.entries(ACCOUNT_MAP)) {
+    const last4 = key.slice(-4);
+    if (
+      name.includes(key) ||          // full account number in name
+      mask === last4 ||               // mask matches last 4
+      mask === key ||                 // mask is full key
+      name.includes(last4)            // last 4 digits anywhere in name
+    ) return map;
+  }
+
+  // Fallback by Plaid subtype
+  const sub = (acct.subtype || '').toLowerCase();
+  const type = (acct.type || '').toLowerCase();
+
+  if (sub.includes('401k') || sub.includes('401 k') || sub === '401a') return {subtype:'401k',      label: rawName};
+  if (sub.includes('roth'))                                              return {subtype:'roth',      label: rawName};
+  if (sub.includes('529'))                                               return {subtype:'529',       label: rawName, child: detect529Child(rawName)};
+  if (sub.includes('ira'))                                               return {subtype:'ira',       label: rawName};
+  if (sub.includes('hsa'))                                               return {subtype:'hsa',       label: rawName};
+  if (sub === 'brokerage' || sub.includes('brokerage'))                  return {subtype:'brokerage', label: rawName};
+  if (sub.includes('pension') || sub.includes('profit'))                 return {subtype:'401k',      label: rawName};
+  if (type === 'credit' || sub.includes('credit'))                       return {subtype:'credit',    label: rawName};
+
+  // Log unmatched accounts to console so we can debug
+  console.log('[AccountMap] Unmatched account:', {name: rawName, mask, sub, type, acct});
+  return {subtype:'other', label: rawName};
+}
+
+// Try to detect which child a 529 belongs to from the account name
+function detect529Child(name) {
+  const n = name.toLowerCase();
+  if (n.includes('kinsley')) return 'Kinsley';
+  if (n.includes('kyle'))    return 'Kyle';
+  if (n.includes('collins')) return 'Collins';
+  return null;
+}
+
+function guessCategoryFromMerchant(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+
+  // Check learned map first (exact match)
+  if (merchantMap[lower]) return merchantMap[lower];
+
+  // Check partial matches in learned map
+  for (const [key, cat] of Object.entries(merchantMap)) {
+    if (lower.includes(key) || key.includes(lower)) return cat;
+  }
+
+  // Amazon: only suggest streaming if raw description explicitly says Prime Video/Music
+  // Otherwise leave blank — Amazon is too varied to auto-categorize
+  if (lower.includes('amazon') || lower.includes('amzn')) {
+    if (/prime video|prime music|audible|kindle/i.test(name)) return 'Streaming';
+    return null; // Let user pick — could be groceries, home, kids, personal, etc.
+  }
+
+  // Check built-in rules
+  for (const rule of MERCHANT_RULES) {
+    if (rule.pattern.test(name)) return rule.cat;
+  }
+
+  return null;
+}
+
+function esc(s) { return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+// ── SINKING FUND LOGIC ────────────────────────────────────────────────────────
+function getSFRecord(cat) {
+  return trackerData.sinkingFunds[cat] || {isActive:false, activeFrom:0, runningBalance:0};
+}
+
+function isSinking(cat) {
+  const r = getSFRecord(cat);
+  return r.isActive === true || r.isActive === 'true';
+}
+
+function setSinkingFlag(cat, val, fromMonthIdx) {
+  const rec = getSFRecord(cat);
+  if (val) {
+    trackerData.sinkingFunds[cat] = {isActive:true, activeFrom:fromMonthIdx, runningBalance: rec.runningBalance || 0};
+  } else {
+    trackerData.sinkingFunds[cat] = {...rec, isActive:false};
+  }
+  scheduleSave();
+}
+
+function getSinkingBalance(cat) {
+  return parseFloat(getSFRecord(cat).runningBalance) || 0;
+}
+
+function updateSinkingRunningBalance(cat, delta) {
+  const rec = getSFRecord(cat);
+  trackerData.sinkingFunds[cat] = {...rec, runningBalance: (parseFloat(rec.runningBalance) || 0) + delta};
+  scheduleSave();
+}
+
+function zeroNegativeSinkingCarryover(cat, idx) {
+  const rec = getSFRecord(cat);
+  if ((parseFloat(rec.runningBalance) || 0) >= 0) return;
+  trackerData.sinkingFunds[cat] = {...rec, runningBalance: 0};
+  scheduleSave();
+  renderTracker(idx);
+}
+// ── TRACKER STATE ─────────────────────────────────────────────────────────────
+function getState(idx, cat) {
+  const k = mk(idx);
+  return (trackerData.state[k] && trackerData.state[k][cat]) || {isSpent:false, isClosed:false, surplusCovered:0};
+}
+
+function setState(idx, cat, patch) {
+  const k = mk(idx);
+  if (!trackerData.state[k]) trackerData.state[k] = {};
+  trackerData.state[k][cat] = {...getState(idx, cat), ...patch};
+  scheduleSave();
+}
+
+function getTxns(idx, cat) {
+  const k = mk(idx);
+  return (trackerData.transactions[k] && trackerData.transactions[k][cat]) || [];
+}
+
+function setTxns(idx, cat, txns) {
+  const k = mk(idx);
+  if (!trackerData.transactions[k]) trackerData.transactions[k] = {};
+  trackerData.transactions[k][cat] = txns;
+  scheduleSave();
+}
+
+function getActual(idx, cat) {
+  const txns = getTxns(idx, cat);
+  if (!txns.length) return null;
+  return txns.reduce((s, t) => s + (t.amt || 0), 0);
+}
+
+function calcAvailable(idx) {
+  const income = getIncome(idx).total;
+  let totalBudget = 0, freed = 0, covered = 0;
+  budgetPlan.forEach(cat => {
+    const budget = getBudget(idx, cat.Category);
+    totalBudget += budget;
+    const st = getState(idx, cat.Category);
+    if (st.isClosed && !isSinking(cat.Category)) {
+      const actual = getActual(idx, cat.Category) || 0;
+      if (actual < budget) freed += budget - actual;
+    }
+    getTxns(idx, cat.Category).forEach(t => {
+      if (t.desc === 'Covered from surplus' && t.amt < 0) covered += Math.abs(t.amt);
+    });
+  });
+  const unallocated = income - totalBudget; // can be negative if over-budgeted
+  const total = freed + unallocated - covered;
+  return {freed, unallocated, total}; // total can be negative
+}
+// ── MONTH NAV ─────────────────────────────────────────────────────────────────
+function renderMonthNav(containerId, activeIdx, showAddBtn) {
+  const total = months.length;
+  const canLeft = windowStart > 0;
+  const canRight = windowStart + WINDOW_SIZE < total;
+  const visible = months.slice(windowStart, windowStart + WINDOW_SIZE);
+  const today = new Date();
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const isTracker = containerId === 'monthNav';
+  const selectFn = isTracker ? 'selectTrackerMonth' : 'selectMonthlyMonth';
+
+  const monthBtns = visible.map((mo, i) => {
+    const globalIdx = windowStart + i;
+    const isPast = mo.year < today.getFullYear() || (mo.year === today.getFullYear() && mo.month < today.getMonth() + 1);
+    return `<button class="month-btn ${globalIdx === activeIdx ? 'active' : ''} ${isPast ? 'past' : ''}" onclick="${selectFn}(${globalIdx})">${mo.label}</button>`;
+  }).join('');
+
+  const addBtn = showAddBtn ? `<button class="add-month-btn" onclick="addNextMonth()">+ Next month</button>` : '';
+
+  container.innerHTML =
+    `<button class="month-chevron" ${canLeft ? '' : 'disabled'} onclick="shiftWindow(-1,'${containerId}',${activeIdx})">&#8249;</button>` +
+    `<div class="month-scroll" id="${containerId}Scroll">${monthBtns}${addBtn}</div>` +
+    `<button class="month-chevron" ${canRight ? '' : 'disabled'} onclick="shiftWindow(1,'${containerId}',${activeIdx})">&#8250;</button>`;
+}
+
+function shiftWindow(dir, containerId, activeIdx) {
+  windowStart = Math.max(0, Math.min(windowStart + dir * WINDOW_SIZE, months.length - WINDOW_SIZE));
+  if (containerId === 'monthNav') renderMonthNav('monthNav', activeIdx, true);
+  else renderMonthNav('monthlyNav', activeIdx, false);
+}
+
+function selectTrackerMonth(idx) {
+  expandedCats.clear();
+  collapsedSections.clear();
+  closeAllDropdowns();
+  renderTracker(idx);
+}
+
+function selectMonthlyMonth(idx) {
+  renderMonthly(idx);
+}
+
+function addNextMonth() {
+  const last = months[months.length - 1];
+  const next = nextMonth(last);
+  budgetPlan.forEach(cat => {
+    if (!trackerBudgets[next.key]) trackerBudgets[next.key] = {};
+    trackerBudgets[next.key][cat.Category] = cat.amounts['Jul27'] || 0;
+  });
+  months.push(next);
+  windowStart = Math.max(0, months.length - WINDOW_SIZE);
+  scheduleSave();
+  renderTracker(months.length - 1);
+}
+// ── TRACKER RENDER ────────────────────────────────────────────────────────────
+function toggleSection(secName) {
+  if (collapsedSections.has(secName)) collapsedSections.delete(secName);
+  else collapsedSections.add(secName);
+  renderTracker(trackerIdx);
+}
+
+function toggleCat(cat) {
+  if (expandedCats.has(cat)) expandedCats.delete(cat);
+  else expandedCats.add(cat);
+  renderTracker(trackerIdx);
+}
+
+function markAllComplete(idx, secName) {
+  budgetPlan.forEach(cat => {
+    if (cat.Section !== secName) return;
+    const budget = getBudget(idx, cat.Category);
+    if (!budget || budget <= 0) return;
+    if (getState(idx, cat.Category).isSpent) return; // already done
+    toggleSpent(idx, cat.Category, budget);
+  });
+  renderTracker(idx);
+}
+
+function markSectionSpent(idx, secName, event) {
+  event.stopPropagation();
+  budgetPlan.forEach(cat => {
+    if (cat.Section !== secName) return;
+    const budget = getBudget(idx, cat.Category);
+    if (!budget || budget <= 0) return;
+    if (getState(idx, cat.Category).isSpent) return;
+    toggleSpent(idx, cat.Category, budget);
+  });
+  renderTracker(idx);
+}
+
+function renderTracker(idx) {
+  trackerIdx = idx;
+  renderMonthNav('monthNav', idx, true);
+
+  const income = getIncome(idx).total;
+  let totalActual = 0;
+  budgetPlan.forEach(cat => {
+    const a = getActual(idx, cat.Category);
+    if (a !== null) totalActual += a;
+  });
+
+  const avail = calcAvailable(idx);
+
+  document.getElementById('trackerCards').innerHTML =
+    `<div class="card"><div class="card-label">Income</div><div class="card-value blue">${fmt(income)}</div></div>` +
+    `<div class="card"><div class="card-label">Spent</div><div class="card-value ${totalActual > 0 ? 'green' : ''}">${fmt(totalActual)}</div></div>` +
+    `<div class="card"><div class="card-label">Available</div><div class="card-value" style="color:${avail.total < 0 ? '#ff3b30' : '#ff9500'}">${avail.total < 0 ? '-' : ''}${fmt(Math.abs(avail.total))}</div></div>`;
+
+  // Sync button
+  const syncRow = document.getElementById('syncTxnRow');
+  if (syncRow) syncRow.innerHTML =
+    `<button id="syncTxnBtn" class="btn-xs btn-add" style="font-size:12px;padding:6px 14px" onclick="syncPlaidTransactions()">&#8635; Sync Chase (${months[idx].label})</button>` +
+    '<span id="syncTxnStatus" style="font-size:12px;color:#8e8e93;margin-left:8px"></span>';
+
+  // Pending queue
+  const pqEl = document.getElementById('pendingQueue');
+  if (pqEl) pqEl.innerHTML = renderPendingQueue();
+
+  // Surplus/deficit banner
+  const sb = document.getElementById('surplusBanner');
+  if (avail.total > 0.005) {
+    sb.innerHTML = `<div class="surplus-banner">💰 <strong>${fmt(avail.total)}</strong> available — ${fmt(avail.freed)} freed from closed categories${avail.unallocated > 0 ? ' · ' + fmt(avail.unallocated) + ' unallocated' : ''}</div>`;
+  } else if (avail.total < -0.005) {
+    sb.innerHTML = `<div class="surplus-banner" style="background:#fff0f0;border-color:#ff3b30;color:#c0392b">⚠️ <strong>${fmt(Math.abs(avail.total))}</strong> over budget — budgeted categories exceed income by this amount</div>`;
+  } else {
+    sb.innerHTML = '';
+  }
+
+  // Group categories by section
+  const sections = {};
+  budgetPlan.forEach(cat => {
+    const sec = cat.Section || 'Other';
+    if (!sections[sec]) sections[sec] = {col: cat.Color || '#8e8e93', items: []};
+    sections[sec].items.push(cat);
+  });
+
+  let html = '';
+  Object.entries(sections).forEach(([secName, {col, items}]) => {
+    let secBudget = 0, secActual = 0;
+    items.forEach(cat => {
+      secBudget += getBudget(idx, cat.Category);
+      const a = getActual(idx, cat.Category);
+      if (a !== null) secActual += a;
+    });
+    const secVar = secActual > 0 ? secActual - secBudget : null;
+    const secCollapsed = collapsedSections.has(secName);
+    const secNonZero = items.filter(c => (getBudget(idx, c.Category) || 0) > 0);
+    const secAllDone = secNonZero.length > 0 && secNonZero.every(c => getState(idx, c.Category).isSpent || getActual(idx, c.Category) === getBudget(idx, c.Category));
+    const secAllSavings = secNonZero.length > 0 && secNonZero.every(c => c.isSavings);
+
+    const secHdrMeta = secCollapsed
+      ? `<span style="color:rgba(255,255,255,0.8);font-size:12px;font-variant-numeric:tabular-nums">${fmt(secActual)} / ${fmt(secBudget)}</span>`
+      : [
+          secAllDone ? '<span style="color:#fff;font-weight:600;font-size:13px">✓</span>' : '',
+          secVar !== null ? `<span style="color:${secVar > 0.005 ? '#ffcccc' : secVar < -0.005 ? '#ccffcc' : 'rgba(255,255,255,0.7)'};font-size:12px;font-weight:600">${fmtSigned(secVar)}</span>` : '',
+          `<span style="font-size:12px;color:rgba(255,255,255,0.8)">${fmt(secBudget)}</span>`,
+        ].join('');
+
+    html += `<div class="section">`;
+    html += `<div class="sec-hdr" style="cursor:pointer;background:${col};border-radius:14px 14px 0 0" onclick="toggleSection('${esc(secName)}')">
+      <div class="sec-title" style="color:#fff;font-size:13px">${secName}</div>
+      <div class="sec-meta">
+        ${secHdrMeta}
+        <button class="btn-xs" style="background:rgba(255,255,255,0.25);color:#fff;padding:3px 9px;font-size:11px;margin-left:6px"
+          onclick="event.stopPropagation();markAllComplete(${idx},'${esc(secName)}')">✓ All</button>
+        <span style="color:rgba(255,255,255,0.8);font-size:14px;margin-left:6px">${secCollapsed ? '›' : '⌄'}</span>
+      </div>
+    </div>`;
+    if (!secCollapsed) items.forEach(cat => { html += renderCatRow(idx, cat); });
+    html += `</div>`;
+  });
+
+  document.getElementById('trackerSections').innerHTML = html;
+}
+
+function renderCatRow(idx, cat) {
+  const budget = getBudget(idx, cat.Category);
+  const st = getState(idx, cat.Category);
+  const txns = getTxns(idx, cat.Category);
+  const actual = getActual(idx, cat.Category);
+  const sf = isSinking(cat.Category);
+  const sfBal = sf ? getSinkingBalance(cat.Category) : 0;
+  const effectiveBudget = budget + sfBal;
+  const variance = actual !== null ? actual - effectiveBudget : null;
+  const pct = actual !== null ? Math.min((actual / Math.max(effectiveBudget, 0.01)) * 100, 120) : 0;
+  const barColor = variance === null ? '#d1d1d6' : variance > 0.005 ? '#ff3b30' : '#34c759';
+  const isExpanded = expandedCats.has(cat.Category);
+  const canCover = variance !== null && variance > 0.005 && calcAvailable(idx).total > 0 && !st.isClosed;
+  const planBudget = getPlanBudget(idx, cat.Category);
+  const budgetChanged = Math.abs(budget - planBudget) > 0.005;
+
+  const badges = [
+    sf ? `<span class="flag flag-sf">Sinking${sfBal !== 0 ? (sfBal > 0 ? ' +' + fmt(sfBal) : ' ' + fmt(sfBal)) : ''}</span>` : '',
+    st.isClosed ? '<span class="flag flag-closed">Closed</span>' : '',
+    variance !== null && variance > 0.005 && !st.isClosed ? '<span class="flag flag-over">Over</span>' : '',
+  ].join('');
+
+  const txnCountBadge = txns.length && !isExpanded ? `<span class="txn-count">${txns.length}</span>` : '';
+
+  const catHeader = `<div class="cat-header" onclick="toggleCat('${esc(cat.Category)}')">
+    <span class="cat-chevron ${isExpanded ? 'open' : ''}">▼</span>
+    <span class="cat-name" style="font-weight:700;color:#1c1c1e">${cat.Category}</span>
+    <div class="cat-badges">${badges}${txnCountBadge}</div>
+    <div class="cat-right">
+      <div style="display:flex;align-items:center;gap:3px">
+        <input class="cat-budget-input" value="${fmt(budget)}"
+          onclick="event.stopPropagation()"
+          onblur="saveBudgetEdit(${idx},'${esc(cat.Category)}',this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur()}"
+          title="Tap to edit budget">
+        <button style="background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1"
+          onclick="event.stopPropagation();${st.isClosed ? 'reopenCategory' : 'closeCategory'}(${idx},'${esc(cat.Category)}')"
+          title="${st.isClosed ? 'Reopen' : 'Close'} category">${st.isClosed ? '🔒' : '🔓'}</button>
+      </div>
+      ${sf ? `<span style="font-size:11px;color:#34c759;font-variant-numeric:tabular-nums">Bal: ${fmt(effectiveBudget)}</span>` : ''}
+      <span class="cat-actual" style="color:${actual !== null ? (variance !== null && variance > 0.005 ? '#ff3b30' : '#1c1c1e') : '#8e8e93'}">${actual !== null ? fmt(actual) : '—'}</span>
+      <span class="cat-var ${variance !== null && variance > 0.005 ? 'var-over' : variance !== null && variance < -0.005 ? 'var-under' : 'var-exact'}">${fmtSigned(variance)}</span>
+    </div>
+  </div>`;
+
+  const barHtml = actual !== null
+    ? `<div class="cat-bar"><div class="cat-bar-fill" style="width:${Math.min(pct, 100).toFixed(1)}%;background:${barColor}"></div></div>`
+    : '';
+
+  const actionsHtml = `<div class="cat-actions">
+    <div class="cat-actions-left">
+      <button class="btn-xs btn-add" onclick="openAdd(${idx},'${esc(cat.Category)}')">+ Add</button>
+      ${canCover ? `<button class="btn-xs btn-cover" onclick="coverFromSurplus(${idx},'${esc(cat.Category)}',${variance.toFixed(2)})">Cover ${fmt(variance)}</button>` : ''}
+    </div>
+    <div class="cat-actions-right">
+      <div class="menu-wrap">
+        <button class="btn-menu" onclick="event.stopPropagation();toggleDropdown('dd_${esc(cat.Category)}')">⋮</button>
+        <div class="dropdown" id="dd_${esc(cat.Category)}">
+          <div class="dd-item" onclick="toggleSinking(${idx},'${esc(cat.Category)}')">
+            <span class="dd-icon">${sf ? '✅' : '⬜'}</span> ${sf ? 'Remove sinking fund' : 'Mark as sinking fund'}
+          </div>
+          ${sf && sfBal < 0 ? `<div class="dd-item" onclick="zeroNegativeSinkingCarryover('${esc(cat.Category)}',${idx})"><span class="dd-icon">🔄</span> Zero out negative carryover</div>` : ''}
+          <div class="dd-item" onclick="${st.isClosed ? 'reopenCategory' : 'closeCategory'}(${idx},'${esc(cat.Category)}')">
+            <span class="dd-icon">${st.isClosed ? '🔓' : '🔒'}</span> ${st.isClosed ? 'Reopen category' : 'Close category'}
+          </div>
+          ${budgetChanged ? `<div class="dd-item" onclick="resetBudget(${idx},'${esc(cat.Category)}')"><span class="dd-icon">↩️</span> Reset to plan (${fmt(planBudget)})</div>` : ''}
+        </div>
+      </div>
+      <button class="btn-xs btn-spent ${st.isSpent ? 'done' : ''}" onclick="toggleSpent(${idx},'${esc(cat.Category)}',${budget})">
+        ${cat.isSavings ? (st.isSpent ? 'Saved ✓' : 'Mark Saved') : (st.isSpent ? 'Spent ✓' : 'Mark Spent')}
+      </button>
+    </div>
+  </div>`;
+
+  const txnHtml = isExpanded
+    ? (txns.length
+        ? buildTxnHtml(txns, idx, cat.Category, st.isClosed)
+        : `<div class="txn-list">${!st.isClosed && !IS_TOUCH
+            ? `<div class="cat-drop-zone" style="margin:4px 0"
+                 ondragover="onDropZoneDragOver(event,'${esc(cat.Category)}')"
+                 ondragleave="onDropZoneDragLeave(event)"
+                 ondrop="onDropZoneDrop(event,'${esc(cat.Category)}',${idx})">
+                 <span>Drop here to move transaction</span>
+               </div>`
+            : '<div style="padding:8px 16px;color:#8e8e93;font-size:13px">No transactions yet</div>'}
+        </div>`)
+    : '';
+
+  const subNote = st.isClosed && !sf && variance !== null && variance < -0.005
+    ? `<div class="sub-note good">Freed ${fmt(Math.abs(variance))} to surplus</div>`
+    : sf && st.isClosed && variance !== null && variance !== 0
+    ? `<div class="sub-note ${variance < 0 ? 'good' : 'warn'}">${variance < 0 ? 'Added ' + fmt(Math.abs(variance)) + ' to sinking balance' : 'Drew ' + fmt(variance) + ' from sinking balance'}</div>`
+    : '';
+
+  return `<div class="cat-row ${st.isClosed ? 'closed-row' : ''} ${sf ? 'sinking-row' : ''}">
+    ${catHeader}
+    ${barHtml}
+    ${actionsHtml}
+    <div class="cat-body ${isExpanded ? 'open' : ''}">
+      ${subNote}
+      ${txnHtml}
+    </div>
+  </div>`;
+}
+
+// Detect touch device — disable drag on mobile
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+// Drag state
+let dragSrc = null; // {idx, cat, ti, txn}
+
+function onTxnDragStart(e, idx, cat, ti) {
+  dragSrc = {idx, cat, ti, txn: getTxns(idx, cat)[ti]};
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', JSON.stringify({idx, cat, ti}));
+  e.currentTarget.style.opacity = '0.4';
+  document.body.classList.add('dragging-active');
+}
+
+function onTxnDragEnd(e) {
+  e.currentTarget.style.opacity = '1';
+  document.querySelectorAll('.cat-drop-zone').forEach(z => z.classList.remove('drag-over'));
+  document.body.classList.remove('dragging-active');
+  dragSrc = null;
+}
+
+function onDropZoneDragOver(e, targetCat) {
+  if (!dragSrc || dragSrc.cat === targetCat) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.cat-drop-zone').forEach(z => z.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+
+function onDropZoneDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onDropZoneDrop(e, targetCat, targetIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragSrc || dragSrc.cat === targetCat) return;
+
+  const {idx, cat, ti, txn} = dragSrc;
+
+  // Remove from source
+  const srcTxns = getTxns(idx, cat);
+  srcTxns.splice(ti, 1);
+  setTxns(idx, cat, srcTxns);
+
+  // Add to target
+  const tgtTxns = getTxns(targetIdx, targetCat);
+  tgtTxns.push({...txn, splitGroupId: null}); // clear split group when moving
+  setTxns(targetIdx, targetCat, tgtTxns);
+
+  expandedCats.add(targetCat);
+  expandedCats.add(cat);
+  dragSrc = null;
+  renderTracker(idx);
+}
+
+function buildTxnHtml(txns, idx, cat, closed) {
+  if (!txns.length) return '';
+
+  // Separate manual vs imported (Plaid) transactions
+  const manual   = txns.filter(t => !t.id || t.id.length < 16);
+  const imported = txns.filter(t => t.id && t.id.length >= 16);
+
+  const importedKey = `imp_${cat}_${idx}`;
+  const impCollapsed = collapsedSections.has(importedKey);
+
+  const txnRow = (t, ti) => {
+    const realTi = txns.indexOf(t);
+    const dateStr = t.ts ? new Date(t.ts).toLocaleDateString('en-US', {month:'short', day:'numeric'}) : '';
+    const del  = closed ? '' : `<button class="txn-del" onclick="event.stopPropagation();deleteTxn(${idx},'${esc(cat)}',${realTi})" title="Delete">&#xD7;</button>`;
+    const edit = closed ? '' : `<button class="txn-del" style="color:#007aff;font-size:13px" onclick="event.stopPropagation();openEditTxn(${idx},'${esc(cat)}',${realTi})" title="Edit">&#9998;</button>`;
+    const dragAttrs = (!closed && !IS_TOUCH)
+      ? `draggable="true"
+         ondragstart="onTxnDragStart(event,${idx},'${esc(cat)}',${realTi})"
+         ondragend="onTxnDragEnd(event)"`
+      : '';
+    const dragHandle = (!closed && !IS_TOUCH)
+      ? `<span style="color:#c7c7cc;font-size:14px;cursor:grab;margin-right:4px;flex-shrink:0" title="Drag to move">&#8942;</span>`
+      : '';
+    return `<div class="txn" ${dragAttrs}>
+      ${dragHandle}
+      <span class="txn-icon" style="flex-shrink:0">${t.splitGroupId ? '⇄' : '$'}</span>
+      <div style="flex:1;min-width:0">
+        <div class="txn-desc" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.desc || 'Transaction'}</div>
+        ${dateStr ? `<div style="font-size:10px;color:#8e8e93">${dateStr}</div>` : ''}
+      </div>
+      <span class="txn-amt" style="color:${t.amt < 0 ? '#34c759' : '#1c1c1e'};white-space:nowrap;margin-left:6px">${fmt(t.amt)}</span>
+      ${edit}${del}
+    </div>`;
+  };
+
+  const manualHtml = manual.map(t => txnRow(t, txns.indexOf(t))).join('');
+
+  let importedHtml = '';
+  if (imported.length) {
+    importedHtml = `
+      <div onclick="event.stopPropagation();toggleImportedTxns('${esc(importedKey)}')"
+        style="display:flex;align-items:center;justify-content:space-between;padding:4px 16px;background:#f9f9f9;cursor:pointer;border-top:1px solid #f2f2f7">
+        <span style="font-size:11px;color:#8e8e93;font-weight:600">IMPORTED (${imported.length})</span>
+        <span style="font-size:11px;color:#8e8e93">${impCollapsed ? '›' : '⌄'}</span>
+      </div>
+      ${impCollapsed ? '' : imported.map(t => txnRow(t, txns.indexOf(t))).join('')}`;
+  }
+
+  // Drop zone — only on desktop
+  const dropZone = !closed && !IS_TOUCH
+    ? `<div class="cat-drop-zone"
+         ondragover="onDropZoneDragOver(event,'${esc(cat)}')"
+         ondragleave="onDropZoneDragLeave(event)"
+         ondrop="onDropZoneDrop(event,'${esc(cat)}',${idx})">
+         <span>Drop here to move transaction</span>
+       </div>`
+    : '';
+
+  return `<div class="txn-list">${manualHtml}${importedHtml}${dropZone}</div>`;
+}
+
+function toggleImportedTxns(key) {
+  if (collapsedSections.has(key)) collapsedSections.delete(key);
+  else collapsedSections.add(key);
+  renderTracker(trackerIdx);
+}
+
+// ── EDIT TRANSACTION ──────────────────────────────────────────────────────────
+function openEditTxn(idx, cat, ti) {
+  const txns = getTxns(idx, cat);
+  const t = txns[ti];
+  if (!t) return;
+
+  // Reuse the add modal but prefill it
+  modalCtx = {idx, editCat: cat, editTi: ti};
+  document.getElementById('modalAddTitle').textContent = 'Edit transaction';
+  document.getElementById('addDesc').value = t.desc || '';
+  document.getElementById('addRows').innerHTML = '';
+  document.getElementById('addRemaining').style.display = 'none';
+
+  // If it's a split, show all split rows
+  if (t.splitGroupId) {
+    // Find all transactions in this split group across all categories
+    const allSplits = [];
+    budgetPlan.forEach(c => {
+      getTxns(idx, c.Category).forEach((st, sti) => {
+        if (st.splitGroupId === t.splitGroupId) allSplits.push({cat: c.Category, txn: st, ti: sti});
+      });
+    });
+    modalCtx.editSplitGroup = t.splitGroupId;
+    modalCtx.editSplitCats = allSplits.map(s => s.cat);
+    allSplits.forEach(s => addSplitRow(s.cat, s.txn.amt));
+  } else {
+    addSplitRow(cat, t.amt);
+  }
+
+  document.getElementById('modalAdd').classList.add('open');
+  setTimeout(() => {
+    const firstAmt = document.querySelector('#addRows .split-row input[type="number"]');
+    if (firstAmt) firstAmt.focus();
+  }, 100);
+}
+// ── TRACKER ACTIONS ───────────────────────────────────────────────────────────
+function toggleSpent(idx, cat, budget) {
+  const st = getState(idx, cat);
+  const catObj = budgetPlan.find(c => c.Category === cat) || {};
+  const label = catObj.isSavings ? 'Mark Saved' : 'Mark Spent';
+  const txns = getTxns(idx, cat);
+
+  if (st.isSpent) {
+    setTxns(idx, cat, txns.filter(t => !(t.desc === label && t.autoGenerated)));
+    setState(idx, cat, {isSpent: false});
+  } else {
+    const manualTotal = txns.filter(t => !t.autoGenerated).reduce((s, t) => s + (t.amt || 0), 0);
+    const remaining = budget - manualTotal;
+    if (remaining > 0.005) {
+      const cleaned = txns.filter(t => !(t.desc === label && t.autoGenerated));
+      cleaned.push({id: uid(), desc: label, amt: remaining, ts: new Date().toISOString(), splitGroupId: null, autoGenerated: true});
+      setTxns(idx, cat, cleaned);
+    }
+    setState(idx, cat, {isSpent: true});
+  }
+  renderTracker(idx);
+}
+
+function toggleSinking(idx, cat) {
+  closeAllDropdowns();
+  setSinkingFlag(cat, !isSinking(cat), idx);
+  renderTracker(idx);
+}
+
+function closeCategory(idx, cat) {
+  closeAllDropdowns();
+  setState(idx, cat, {isClosed: true});
+  if (isSinking(cat)) {
+    const budget = getBudget(idx, cat);
+    const actual = getActual(idx, cat) || 0;
+    updateSinkingRunningBalance(cat, budget - actual);
+  }
+  renderTracker(idx);
+}
+
+function reopenCategory(idx, cat) {
+  closeAllDropdowns();
+  const wasClosed = getState(idx, cat).isClosed;
+  setState(idx, cat, {isClosed: false});
+  if (wasClosed && isSinking(cat)) {
+    const budget = getBudget(idx, cat);
+    const actual = getActual(idx, cat) || 0;
+    updateSinkingRunningBalance(cat, -(budget - actual));
+  }
+  renderTracker(idx);
+}
+
+function coverFromSurplus(idx, cat, overage) {
+  closeAllDropdowns();
+  const cover = Math.min(Math.abs(overage), calcAvailable(idx).total);
+  const txns = getTxns(idx, cat);
+  txns.push({id: uid(), desc: 'Covered from surplus', amt: -cover, ts: new Date().toISOString(), splitGroupId: null});
+  setTxns(idx, cat, txns);
+  expandedCats.add(cat);
+  renderTracker(idx);
+}
+
+function deleteTxn(idx, cat, ti) {
+  const txns = getTxns(idx, cat);
+  txns.splice(ti, 1);
+  setTxns(idx, cat, txns);
+  clearTimeout(syncTimer);
+  saveAll();
+  renderTracker(idx);
+}
+
+function saveBudgetEdit(idx, cat, rawVal) {
+  const val = parseFloat(rawVal.replace(/[$,]/g, ''));
+  if (isNaN(val) || val < 0) return;
+  const k = mk(idx);
+  if (!trackerBudgets[k]) trackerBudgets[k] = {};
+  trackerBudgets[k][cat] = val;
+  scheduleSave();
+  renderTracker(idx);
+}
+
+function resetBudget(idx, cat) {
+  closeAllDropdowns();
+  const k = mk(idx);
+  if (trackerBudgets[k]) delete trackerBudgets[k][cat];
+  scheduleSave();
+  renderTracker(idx);
+}
+// ── ADD MODAL ─────────────────────────────────────────────────────────────────
+function openAdd(idx, cat) {
+  modalCtx = {idx};
+  document.getElementById('modalAddTitle').textContent = 'Add transaction';
+  document.getElementById('addDesc').value = '';
+  document.getElementById('addDesc').style.display = '';
+  document.getElementById('addRows').innerHTML = '';
+  document.getElementById('addRemaining').style.display = 'none';
+  addSplitRow(cat, null);
+  document.getElementById('modalAdd').classList.add('open');
+  setTimeout(() => {
+    const firstAmt = document.querySelector('#addRows .split-row input[type="number"]');
+    if (firstAmt) firstAmt.focus();
+  }, 100);
+}
+
+function addSplitRow(defaultCat, defaultAmt) {
+  const opts = budgetPlan.map(c => `<option value="${c.Category}" ${c.Category === defaultCat ? 'selected' : ''}>${c.Category}</option>`).join('');
+  const div = document.createElement('div');
+  div.className = 'split-row';
+  div.innerHTML = `
+    <select onchange="updateAddRemaining()" tabindex="3">${opts}</select>
+    <input type="number" placeholder="0.00" step="0.01" min="0"
+      value="${defaultAmt !== null && defaultAmt !== undefined ? defaultAmt : ''}"
+      oninput="updateAddRemaining()"
+      tabindex="1"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();saveAdd()};if(event.key==='Tab'){event.preventDefault();document.getElementById('addDesc').focus()}">
+    <button onclick="this.parentElement.remove();updateAddRemaining()" tabindex="-1">&#xD7;</button>`;
+  document.getElementById('addRows').appendChild(div);
+  // Description is tabindex 2 — Tab from amount lands here, Enter submits
+  const descEl = document.getElementById('addDesc');
+  if (descEl) descEl.setAttribute('tabindex', '2');
+  updateAddRemaining();
+}
+
+function updateAddRemaining() {
+  const rows = document.querySelectorAll('#addRows .split-row');
+  if (rows.length <= 1) { document.getElementById('addRemaining').style.display = 'none'; return; }
+  let total = 0;
+  rows.forEach(r => total += parseFloat(r.querySelector('input').value) || 0);
+  const el = document.getElementById('addRemaining');
+  el.style.display = 'block';
+  el.textContent = `Total: ${fmt(total)}`;
+  el.style.color = '#3a3a3c';
+}
+
+function saveAdd() {
+  if (!modalCtx) return;
+
+  // Windfall modal has its own save function
+  if (modalCtx.type === 'windfall') { saveWindfall(); return; }
+
+  const desc = document.getElementById('addDesc').value.trim() || 'Transaction';
+  const rows = document.querySelectorAll('#addRows .split-row');
+  const splits = [];
+  rows.forEach(r => {
+    const cat = r.querySelector('select').value;
+    const amt = parseFloat(r.querySelector('input').value);
+    if (cat && amt > 0) splits.push({cat, amt});
+  });
+  if (!splits.length) return;
+
+  const savedIdx = modalCtx.idx;
+
+  // If editing — delete the old transaction(s) first
+  if (modalCtx.editSplitGroup) {
+    // Remove all rows in this split group
+    budgetPlan.forEach(c => {
+      const filtered = getTxns(savedIdx, c.Category).filter(t => t.splitGroupId !== modalCtx.editSplitGroup);
+      setTxns(savedIdx, c.Category, filtered);
+    });
+  } else if (modalCtx.editCat !== undefined && modalCtx.editTi !== undefined) {
+    // Remove the single transaction being edited
+    const txns = getTxns(savedIdx, modalCtx.editCat);
+    txns.splice(modalCtx.editTi, 1);
+    setTxns(savedIdx, modalCtx.editCat, txns);
+  }
+
+  // Save new transaction(s)
+  const sgId = splits.length > 1 ? 'sg_' + uid() : null;
+  splits.forEach(s => {
+    const txns = getTxns(savedIdx, s.cat);
+    const existingId = (modalCtx.editCat === s.cat && modalCtx.editTi !== undefined)
+      ? undefined : undefined; // always new id on save
+    txns.push({id: uid(), desc, amt: s.amt, ts: new Date().toISOString(), splitGroupId: sgId});
+    setTxns(savedIdx, s.cat, txns);
+    expandedCats.add(s.cat);
+  });
+
+  closeModal();
+  renderTracker(savedIdx);
+}
+
+function closeModal() {
+  document.getElementById('modalAdd').classList.remove('open');
+  document.getElementById('addDesc').style.display = '';
+  modalCtx = null;
+}
+
+document.getElementById('modalAdd').addEventListener('click', e => { if (e.target.id === 'modalAdd') closeModal(); });
+// ── DROPDOWN ──────────────────────────────────────────────────────────────────
+function toggleDropdown(id) {
+  closeAllDropdowns();
+  const dd = document.getElementById(id);
+  if (dd) { dd.classList.add('open'); document.getElementById('ddOverlay').style.display = 'block'; }
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+  document.getElementById('ddOverlay').style.display = 'none';
+}
+// ── MONTHLY VIEW ──────────────────────────────────────────────────────────────
+function renderMonthly(idx) {
+  monthlyIdx = idx;
+  renderMonthNav('monthlyNav', idx, false);
+  const income = getIncome(idx);
+
+  document.getElementById('monthlyIncome').innerHTML =
+    `<strong>${fmt(income.total)}</strong> <span style="color:#6e6e73">(Eric ${fmt(income.eric)} + Mattie ${fmt(income.mattie)})</span>`;
+
+  const sections = {};
+  let totalExp = 0, totalSav = 0;
+  budgetPlan.forEach(cat => {
+    const sec = cat.Section || 'Other';
+    if (!sections[sec]) sections[sec] = {col: cat.Color || '#8e8e93', items: []};
+    sections[sec].items.push(cat);
+    const b = getPlanBudget(idx, cat.Category);
+    if (SAVING_SECTIONS.includes(sec)) totalSav += b; else totalExp += b;
+  });
+
+  document.getElementById('monthlyCards').innerHTML =
+    `<div class="card"><div class="card-label">Expenses</div><div class="card-value blue">${fmt(totalExp)}</div></div>` +
+    `<div class="card"><div class="card-label">Savings</div><div class="card-value purple">${fmt(totalSav)}</div></div>` +
+    `<div class="card"><div class="card-label">Remaining</div><div class="card-value green">${fmt(income.total - totalExp - totalSav)}</div></div>`;
+
+  const mo = months[idx];
+  const raiseBanner = (mo.year === 2027 && mo.month === 1)
+    ? `<div class="raise-banner">&#x1F389; Eric's 3% raise this month (+$340.70/mo)</div>`
+    : (mo.year === 2027 && mo.month === 6)
+    ? `<div class="raise-banner">&#x1F389; Mattie's 3.5% raise this month (+$182.93/mo)</div>`
+    : '';
+  document.getElementById('monthlyBanner').innerHTML = raiseBanner;
+
+  let html = '';
+  Object.entries(sections).forEach(([secName, {col, items}]) => {
+    const secTotal = items.reduce((s, c) => s + getPlanBudget(idx, c.Category), 0);
+    html += `<div class="section"><div class="sec-hdr">
+      <div class="sec-accent" style="background:${col}"></div>
+      <div class="sec-title">${secName}</div>
+      <div class="sec-meta"><span style="font-size:12px;color:#8e8e93">${fmt(secTotal)}</span></div>
+    </div>`;
+    items.forEach(cat => {
+      const b = getPlanBudget(idx, cat.Category);
+      if (b === 0) return;
+      html += `<div class="cat-row"><div class="cat-header" style="cursor:default">
+        <span class="cat-name">${cat.Category}</span>
+        <div class="cat-right"><span class="cat-actual">${fmt(b)}</span></div>
+      </div></div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('monthlySections').innerHTML = html;
+
+  const eP = Math.min((totalExp / income.total) * 100, 100);
+  const sP = Math.min((totalSav / income.total) * 100, 100);
+  document.getElementById('monthlyBar').innerHTML =
+    `<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px">
+      <span style="font-weight:600">Total: ${fmt(totalExp + totalSav)}</span><span style="color:#6e6e73">of ${fmt(income.total)}</span></div>
+    <div style="background:#e5e5ea;border-radius:6px;height:10px;overflow:hidden;display:flex;margin-bottom:6px">
+      <div style="width:${eP.toFixed(1)}%;background:#007aff;height:100%;border-radius:6px 0 0 6px"></div>
+      <div style="width:${sP.toFixed(1)}%;background:#af52de;height:100%;border-radius:0 6px 6px 0"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px">
+      <span style="color:#007aff">Expenses: ${fmt(totalExp)}</span><span style="color:#af52de">Savings: ${fmt(totalSav)}</span></div>`;
+}
+// ── PROJECTION ────────────────────────────────────────────────────────────────
+function buildProjection() {
+  const RAISE = {6: "Eric +3%", 12: "Mattie +3.5%"};
+  let tI = 0, tE = 0, tS = 0, tR = 0;
+
+  document.getElementById('projRows').innerHTML = BASE_MONTHS.map((mo, idx) => {
+    const inc = getIncome(idx).total;
+    let exp = 0, sav = 0;
+    budgetPlan.forEach(cat => {
+      const b = getPlanBudget(idx, cat.Category);
+      if (SAVING_SECTIONS.includes(cat.Section)) sav += b; else exp += b;
+    });
+    const rem = inc - exp - sav;
+    tI += inc; tE += exp; tS += sav; tR += rem;
+    const rn = RAISE[idx];
+    const remColor = rem < 0 ? '#ff3b30' : '#34c759';
+    return `<div class="proj-row${rn ? ' raise' : ''}">
+      <div class="proj-month"><div>${mo.label}</div>${rn ? `<div style="font-size:9px;color:#1a7f37;font-weight:600">${rn}</div>` : ''}</div>
+      <div class="proj-income" style="color:#007aff">${fmt(inc)}</div>
+      <div class="proj-exp">${fmt(exp)}</div>
+      <div class="proj-sav" style="color:#af52de">${fmt(sav)}</div>
+      <div class="proj-rem" style="color:${remColor}">${rem < 0 ? '-' : ''}${fmt(Math.abs(rem))}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('projSummary').innerHTML =
+    `<div style="font-size:13px;font-weight:600;margin-bottom:10px">14-Month Totals (Plan)</div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px solid #f2f2f7"><span style="color:#6e6e73">Total income</span><span style="color:#007aff;font-weight:500">${fmt(tI)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px solid #f2f2f7"><span style="color:#6e6e73">Total expenses</span><span style="font-weight:500">${fmt(tE)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px solid #f2f2f7"><span style="color:#6e6e73">Total savings</span><span style="color:#af52de;font-weight:500">${fmt(tS)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0;font-weight:600"><span>Total remaining</span><span style="color:${tR < 0 ? '#ff3b30' : '#34c759'}">${tR < 0 ? '-' : ''}${fmt(Math.abs(tR))}</span></div>`;
+}
+// ── PLAID TRANSACTION SYNC ────────────────────────────────────────────────────
+async function syncPlaidTransactions() {
+  const btn = document.getElementById('syncTxnBtn');
+  const status = document.getElementById('syncTxnStatus');
+  if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; }
+  if (status) status.textContent = 'Fetching from Chase...';
+
+  try {
+    const mo = months[trackerIdx];
+    const startDate = `${mo.year}-${String(mo.month).padStart(2,'0')}-01`;
+    const lastDay = new Date(mo.year, mo.month, 0).getDate();
+    const endDate = `${mo.year}-${String(mo.month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+
+    const r = await fetch(`${PLAID_SERVER}/api/get-transactions?start=${startDate}&end=${endDate}`);
+    const {transactions, error} = await r.json();
+    if (error) throw new Error(JSON.stringify(error));
+
+    const monthStart = new Date(mo.year, mo.month - 1, 1);
+    const monthEnd   = new Date(mo.year, mo.month, 0, 23, 59, 59);
+
+    // Build fingerprints of already-logged transactions to catch posted duplicates
+    // of pending transactions we already confirmed
+    const confirmedFingerprints = new Set();
+    budgetPlan.forEach(cat => {
+      getTxns(trackerIdx, cat.Category).forEach(t => {
+        confirmedFingerprints.add(`${t.desc}|${Math.abs(t.amt).toFixed(2)}`);
+      });
+    });
+
+    pendingTxns = (transactions || [])
+      .filter(t => {
+        // Pending txns show today's date — include them regardless of date
+        const d = new Date(t.date + 'T12:00:00');
+        return (t.pending || (d >= monthStart && d <= monthEnd)) && t.amount > 0;
+      })
+      .filter(t => {
+        if (trackerData.confirmedPlaidIds.has(t.transaction_id)) return false;
+        // Skip posted version if we already confirmed the pending version
+        if (!t.pending) {
+          const fp = `${t.merchant_name || t.name}|${t.amount.toFixed(2)}`;
+          if (confirmedFingerprints.has(fp)) return false;
+        }
+        return true;
+      })
+      .map(t => ({
+        id:            t.transaction_id,
+        merchant:      t.merchant_name || t.name,
+        rawName:       t.name,
+        amount:        t.amount,
+        date:          t.date,
+        pending:       t.pending || false,
+        plaidCategory: t.personal_finance_category?.primary || t.category?.[0] || '',
+        suggestedCat:  guessCategoryFromMerchant(t.name) || guessCategoryFromMerchant(t.merchant_name),
+        splits:        null,
+      }));
+
+    const pendingCount = pendingTxns.filter(t => t.pending).length;
+    const postedCount  = pendingTxns.filter(t => !t.pending).length;
+    if (status) {
+      if (!pendingTxns.length) {
+        status.textContent = `All ${mo.label} transactions logged \u2713`;
+      } else {
+        const parts = [];
+        if (postedCount)  parts.push(`${postedCount} posted`);
+        if (pendingCount) parts.push(`${pendingCount} pending`);
+        status.textContent = `${parts.join(', ')} to review`;
+      }
+    }
+    if (btn) { btn.textContent = `\u21BA Sync Chase (${mo.label})`; btn.disabled = false; }
+    renderTracker(trackerIdx);
+  } catch (e) {
+    if (status) status.textContent = 'Error: ' + e.message;
+    if (btn) { btn.textContent = `\u21BA Sync Chase (${months[trackerIdx].label})`; btn.disabled = false; }
+  }
+}
+
+function onPendingCatChange(idx, selectEl) {
+  const txn = pendingTxns[idx];
+  if (!txn) return;
+  const newCat = selectEl.value;
+  if (!newCat) return;
+  // If the user changed to something different from the suggestion, auto-confirm
+  // If it matched the suggestion already, they actively picked it — also auto-confirm
+  // Either way: any deliberate change = save immediately
+  if (newCat !== txn.suggestedCat) {
+    confirmPendingTxn(idx);
+  }
+  // If they picked the same as suggestion, leave ✓ button for them to click
+}
+
+function confirmPendingTxn(idx) {
+  const txn = pendingTxns[idx];
+  if (!txn) return;
+
+  // Check if this is a split transaction
+  if (txn.splits && txn.splits.length > 0) {
+    // Validate splits add up
+    const total = txn.splits.reduce((s, sp) => s + (parseFloat(sp.amt) || 0), 0);
+    if (Math.abs(total - txn.amount) > 0.02) {
+      alert(`Split amounts ($${total.toFixed(2)}) must equal total ($${txn.amount.toFixed(2)})`);
+      return;
+    }
+    const sgId = 'sg_' + uid();
+    txn.splits.forEach(sp => {
+      if (!sp.cat || !sp.amt) return;
+      const txns = getTxns(trackerIdx, sp.cat);
+      txns.push({id: txn.id + '_' + sp.cat, desc: txn.merchant, amt: parseFloat(sp.amt), ts: txn.date + 'T12:00:00.000Z', splitGroupId: sgId, autoGenerated: false});
+      setTxns(trackerIdx, sp.cat, txns);
+      expandedCats.add(sp.cat);
+    });
+  } else {
+    // Single category
+    const sel = document.getElementById('pending_cat_' + idx);
+    const cat = sel ? sel.value : txn.suggestedCat;
+    if (!cat) { alert('Please select a category'); return; }
+    merchantMap[txn.merchant.toLowerCase()] = cat;
+    const txns = getTxns(trackerIdx, cat);
+    txns.push({id: txn.id, desc: txn.merchant, amt: txn.amount, ts: txn.date + 'T12:00:00.000Z', splitGroupId: null, autoGenerated: false});
+    setTxns(trackerIdx, cat, txns);
+    expandedCats.add(cat);
+  }
+
+  trackerData.confirmedPlaidIds.add(txn.id);
+  pendingTxns.splice(idx, 1);
+  renderTracker(trackerIdx);
+}
+
+function skipPendingTxn(idx) {
+  if (pendingTxns[idx]) trackerData.confirmedPlaidIds.add(pendingTxns[idx].id);
+  pendingTxns.splice(idx, 1);
+  renderTracker(trackerIdx);
+}
+
+function togglePendingSplit(idx) {
+  const txn = pendingTxns[idx];
+  if (!txn) return;
+  if (txn.splits) {
+    // Remove split mode
+    txn.splits = null;
+  } else {
+    // Enter split mode — start with two rows
+    const cat = txn.suggestedCat || (budgetPlan[0] && budgetPlan[0].Category) || '';
+    txn.splits = [
+      {cat, amt: (txn.amount / 2).toFixed(2)},
+      {cat: '', amt: (txn.amount / 2).toFixed(2)},
+    ];
+  }
+  renderTracker(trackerIdx);
+}
+
+function updatePendingSplit(txnIdx, splitIdx, field, value) {
+  const txn = pendingTxns[txnIdx];
+  if (!txn || !txn.splits) return;
+  txn.splits[splitIdx][field] = value;
+  // Update remaining display
+  const total = txn.splits.reduce((s, sp) => s + (parseFloat(sp.amt) || 0), 0);
+  const rem = txn.amount - total;
+  const remEl = document.getElementById('split_rem_' + txnIdx);
+  if (remEl) {
+    remEl.textContent = Math.abs(rem) < 0.01 ? '✓ Balanced' : `Remaining: $${rem.toFixed(2)}`;
+    remEl.style.color = Math.abs(rem) < 0.01 ? '#34c759' : '#ff9500';
+  }
+}
+
+function addPendingSplitRow(txnIdx) {
+  const txn = pendingTxns[txnIdx];
+  if (!txn || !txn.splits) return;
+  txn.splits.push({cat: '', amt: ''});
+  renderTracker(trackerIdx);
+}
+
+function removePendingSplitRow(txnIdx, splitIdx) {
+  const txn = pendingTxns[txnIdx];
+  if (!txn || !txn.splits || txn.splits.length <= 2) return;
+  txn.splits.splice(splitIdx, 1);
+  renderTracker(trackerIdx);
+}
+
+function renderPendingQueue() {
+  if (!pendingTxns.length) return '';
+
+  const rows = pendingTxns.map((txn, i) => {
+    const opts = budgetPlan.map(c =>
+      `<option value="${c.Category}" ${c.Category === txn.suggestedCat ? 'selected' : ''}>${c.Category}</option>`
+    ).join('');
+
+    const dateDisplay = new Date(txn.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    const splitTotal = txn.splits ? txn.splits.reduce((s, sp) => s + (parseFloat(sp.amt) || 0), 0) : 0;
+    const splitBalanced = txn.splits && Math.abs(splitTotal - txn.amount) < 0.01;
+
+    // Everything left-aligned: [date] [merchant] [$amt] [dropdown] [⇄][✓][✕] — dead space on right
+    // If user actively changes the dropdown away from the suggestion → auto-confirm
+    // If suggestion was already selected → still requires ✓ click
+    const showRaw = txn.rawName && txn.rawName !== txn.merchant;
+    const pendingBadge = txn.pending
+      ? '<span style="font-size:10px;background:#fff3cd;color:#9a6700;border-radius:4px;padding:1px 5px;font-weight:600;flex-shrink:0">⏳ Pending</span>'
+      : '';
+    const singleRow = !txn.splits ? `
+      <div style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-bottom:1px solid #f9f9f9;justify-content:flex-start">
+        <span style="font-size:11px;color:#8e8e93;white-space:nowrap;flex-shrink:0;min-width:36px">${dateDisplay}</span>
+        <div style="flex-shrink:0;max-width:240px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${txn.merchant}</div>
+            ${pendingBadge}
+          </div>
+          ${showRaw ? `<div style="font-size:10px;color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${txn.rawName}</div>` : ''}
+        </div>
+        <span style="font-size:13px;font-weight:600;color:#ff3b30;white-space:nowrap;flex-shrink:0">\$${txn.amount.toFixed(2)}</span>
+        <select id="pending_cat_${i}"
+          onchange="onPendingCatChange(${i}, this)"
+          style="width:160px;flex-shrink:0;border:1.5px solid #d1d1d6;border-radius:7px;padding:3px 5px;font-size:12px;background:#fff">
+          <option value="">— Category —</option>${opts}
+        </select>
+        <button onclick="togglePendingSplit(${i})" title="Split"
+          style="background:#f2f2f7;color:#3a3a3c;border:none;border-radius:6px;padding:3px 7px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">⇄</button>
+        <button onclick="confirmPendingTxn(${i})"
+          style="background:#34c759;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">✓</button>
+        <button onclick="skipPendingTxn(${i})"
+          style="background:#f2f2f7;color:#8e8e93;border:none;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">✕</button>
+      </div>
+    ` : '';
+
+    // Split mode — more compact version
+    const splitMode = txn.splits ? `
+      <div style="padding:5px 10px;border-bottom:1px solid #f9f9f9">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+          <span style="font-size:11px;color:#8e8e93;white-space:nowrap;flex-shrink:0">${dateDisplay}</span>
+          <div style="flex-shrink:0;max-width:240px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${txn.merchant}</div>
+              ${txn.pending ? '<span style="font-size:10px;background:#fff3cd;color:#9a6700;border-radius:4px;padding:1px 5px;font-weight:600">⏳ Pending</span>' : ''}
+            </div>
+            ${showRaw ? `<div style="font-size:10px;color:#8e8e93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${txn.rawName}</div>` : ''}
+          </div>
+          <span style="font-size:13px;font-weight:600;color:#ff3b30;white-space:nowrap;flex-shrink:0">$${txn.amount.toFixed(2)}</span>
+        </div>
+        ${txn.splits.map((sp, si) => {
+          const spOpts = budgetPlan.map(c =>
+            `<option value="${c.Category}" ${c.Category === sp.cat ? 'selected' : ''}>${c.Category}</option>`
+          ).join('');
+          return `<div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;padding-left:8px">
+            <select onchange="updatePendingSplit(${i},${si},'cat',this.value)"
+              style="flex:1;min-width:0;border:1.5px solid #d1d1d6;border-radius:6px;padding:3px 5px;font-size:11px;background:#fff">
+              <option value="">— Category —</option>${spOpts}
+            </select>
+            <input type="number" value="${sp.amt}" placeholder="0.00" step="0.01" min="0"
+              oninput="updatePendingSplit(${i},${si},'amt',this.value)"
+              style="width:60px;flex-shrink:0;border:1.5px solid #d1d1d6;border-radius:6px;padding:3px 5px;font-size:11px;text-align:right">
+            ${txn.splits.length > 2 ? `<button onclick="removePendingSplitRow(${i},${si})" style="background:none;border:none;color:#ff3b30;font-size:13px;cursor:pointer;padding:0 2px;flex-shrink:0">&#xD7;</button>` : ''}
+          </div>`;
+        }).join('')}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-left:8px">
+          <div style="display:flex;gap:8px">
+            <button onclick="addPendingSplitRow(${i})" style="background:none;border:none;color:#007aff;font-size:11px;cursor:pointer;padding:0">+ row</button>
+            <button onclick="togglePendingSplit(${i})" style="background:none;border:none;color:#8e8e93;font-size:11px;cursor:pointer;padding:0">cancel</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="split_rem_${i}" style="font-size:11px;font-weight:600;color:${splitBalanced ? '#34c759' : '#ff9500'}">${splitBalanced ? '✓ Balanced' : `Rem: $${(txn.amount - splitTotal).toFixed(2)}`}</span>
+            <button onclick="confirmPendingTxn(${i})"
+              style="background:#34c759;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer">✓ Save</button>
+            <button onclick="skipPendingTxn(${i})"
+              style="background:#f2f2f7;color:#8e8e93;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">✕</button>
+          </div>
+        </div>
+      </div>
+    ` : '';
+
+    return singleRow + splitMode;
+  }).join('');
+
+  return `<div style="background:#fff;border-radius:14px;margin-bottom:14px;overflow:hidden;display:inline-block;min-width:500px;max-width:100%">
+    <div style="padding:8px 10px;border-bottom:1px solid #f2f2f7;display:flex;align-items:center;gap:12px">
+      <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#3a3a3c">Review Transactions</div>
+      <div style="font-size:11px;color:#8e8e93">${pendingTxns.length} to categorize &nbsp;·&nbsp; ⇄ = split</div>
+    </div>
+    ${rows}
+  </div>`;
+}
+// ── SNAPSHOT & PLAID BALANCES ─────────────────────────────────────────────────
+function loadPlaidScript() {
+  return new Promise(resolve => {
+    if (plaidLoaded) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+    s.onload = () => { plaidLoaded = true; resolve(); };
+    document.head.appendChild(s);
+  });
+}
+
+async function connectAccount() {
+  const btn = document.getElementById('plaidConnectBtn');
+  if (btn) { btn.textContent = '⏳ Loading...'; btn.disabled = true; }
+  try {
+    await loadPlaidScript();
+    const r = await fetch(PLAID_SERVER + '/api/create-link-token');
+    const {link_token, error} = await r.json();
+    if (error) throw new Error(JSON.stringify(error));
+
+    const handler = Plaid.create({
+      token: link_token,
+      onSuccess: async (public_token, metadata) => {
+        const institution = metadata.institution?.name || 'Unknown';
+        document.getElementById('plaidStatus').textContent = 'Saving ' + institution + '...';
+        const ex = await fetch(PLAID_SERVER + '/api/exchange-token', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({public_token, institution_name: institution})
+        });
+        const exRes = await ex.json();
+        if (exRes.success) {
+          document.getElementById('plaidStatus').textContent = institution + ' connected ✓';
+          await syncBalances();
+        } else {
+          document.getElementById('plaidStatus').textContent = 'Error: ' + JSON.stringify(exRes.error);
+        }
+      },
+      onExit: err => {
+        if (err) document.getElementById('plaidStatus').textContent = 'Error: ' + err.display_message;
+        if (btn) { btn.textContent = '+ Connect Account'; btn.disabled = false; }
+      },
+    });
+    handler.open();
+    if (btn) { btn.textContent = '+ Connect Account'; btn.disabled = false; }
+  } catch (e) {
+    const statusEl = document.getElementById('plaidStatus');
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    if (btn) { btn.textContent = '+ Connect Account'; btn.disabled = false; }
+  }
+}
+
+async function syncBalances() {
+  const syncBtn = document.getElementById('plaidSyncBtn');
+  const statusEl = document.getElementById('plaidStatus');
+  if (syncBtn) { syncBtn.textContent = '⏳ Syncing...'; syncBtn.disabled = true; }
+  if (statusEl) statusEl.textContent = 'Fetching balances...';
+  try {
+    const r = await fetch(PLAID_SERVER + '/api/get-balances');
+    const {accounts, message, error} = await r.json();
+    if (error) throw new Error(JSON.stringify(error));
+    if (message && !accounts?.length) {
+      if (statusEl) statusEl.textContent = message;
+      if (syncBtn) { syncBtn.textContent = '↺ Sync Balances'; syncBtn.disabled = false; }
+      return;
+    }
+    renderPlaidAccounts(accounts || []);
+    if (statusEl) statusEl.textContent = 'Last synced: ' + new Date().toLocaleTimeString();
+    if (syncBtn) { syncBtn.textContent = '↺ Sync Balances'; syncBtn.disabled = false; }
+
+    // Auto-save snapshot to BalanceHistory
+    await saveBalanceSnapshot(accounts || []);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Sync error: ' + e.message;
+    if (syncBtn) { syncBtn.textContent = '↺ Sync Balances'; syncBtn.disabled = false; }
+  }
+}
+
+function renderPlaidAccounts(accounts) { renderSnapshotAccounts(accounts); }
+
+function toggleSnapshotSection(key) {
+  snapshotCollapsed[key] = !snapshotCollapsed[key];
+  renderSnapshotAccounts(window._lastPlaidAccounts || []);
+}
+
+function renderSnapshot() {
+  const p = planConfig;
+  document.getElementById('snapshotContent').innerHTML =
+    '<div class="divider">Overview</div>' +
+    '<div class="card4">' +
+      '<div class="card2"><div class="card-label">Monthly income</div><div class="card-value blue">' + (p['income_monthly'] || '$16,583') + '</div><div class="card-sub">Take-home</div></div>' +
+      '<div class="card2"><div class="card-label">Annual windfall</div><div class="card-value orange">' + (p['windfall_annual'] || '$25,927') + '</div><div class="card-sub">Bonuses + extra checks</div></div>' +
+      '<div class="card2"><div class="card-label">Invested/year</div><div class="card-value purple">' + (p['invested_annual'] || '$70,874') + '</div><div class="card-sub">Incl. employer match</div></div>' +
+      '<div class="card2"><div class="card-label">Emergency fund</div><div class="card-value orange">' + (p['emergency_balance'] || '$17,500') + '</div><div class="card-sub">Target: ' + (p['emergency_target'] || '$78,000') + '</div></div>' +
+    '</div>' +
+    '<div class="divider">Connected accounts</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+      '<button id="plaidConnectBtn" class="btn-xs btn-add" style="font-size:13px;padding:8px 16px" onclick="connectAccount()">+ Connect Account</button>' +
+      '<button id="plaidSyncBtn" class="btn-xs" style="background:#f2f2f7;color:#3a3a3c;font-size:13px;padding:8px 16px" onclick="syncBalances()">&#8635; Sync Balances</button>' +
+    '</div>' +
+    '<p id="plaidStatus" style="font-size:12px;color:#8e8e93;margin-bottom:12px"></p>' +
+    '<div id="plaidAccountsList"></div>' +
+    '<div id="balanceCharts" style="margin-top:8px"></div>';
+  syncBalances();
+  renderBalanceCharts();
+}
+
+function renderSnapshotAccounts(accounts) {
+  window._lastPlaidAccounts = accounts;
+  const el = document.getElementById('plaidAccountsList');
+  if (!el) return;
+  if (!accounts.length) {
+    el.innerHTML = '<p style="font-size:13px;color:#8e8e93;padding:8px 0">No accounts connected yet.</p>';
+    return;
+  }
+
+  const mapped = accounts.filter(a => !a.error).map(a => ({...a, mapping: getAccountMapping(a)}));
+  const groups = {roth:[], '401k':[], brokerage:[], hsa:[], ira:[], k529:{kinsley:[], kyle:[], collins:[]}, credit:[], other:[]};
+
+  mapped.forEach(a => {
+    const sub = a.mapping.subtype;
+    const child = (a.mapping.child || '').toLowerCase();
+    const acctType = (a.type || '').toLowerCase();
+    const acctSub  = (a.subtype || '').toLowerCase();
+
+    if (sub === '529') {
+      // Try mapping child from explicit mapping first, then from account name
+      const detectedChild = child || (detect529Child(a.mapping.label || a.name) || '').toLowerCase();
+      if (detectedChild && groups.k529[detectedChild]) groups.k529[detectedChild].push(a);
+      else {
+        // Unknown 529 child — put under whichever kid has fewest
+        const least = ['kinsley','kyle','collins'].sort((x,y) => groups.k529[x].length - groups.k529[y].length)[0];
+        groups.k529[least].push(a);
+      }
+    }
+    else if (sub === 'roth')      groups.roth.push(a);
+    else if (sub === '401k')      groups['401k'].push(a);
+    else if (sub === 'brokerage') groups.brokerage.push(a);
+    else if (sub === 'hsa')       groups.hsa.push(a);
+    else if (sub === 'ira')       groups.ira.push(a);
+    else if (acctType === 'credit' || acctSub.includes('credit')) groups.credit.push(a);
+    else                          groups.other.push(a);
+  });
+
+  const sum = arr => arr.reduce((s, a) => s + (a.balance || 0), 0);
+  const rothTotal      = sum(groups.roth) + sum(groups.ira);
+  const k401Total      = sum(groups['401k']);
+  const brokerageTotal = sum(groups.brokerage);
+  const hsaTotal       = sum(groups.hsa);
+  const retTotal       = rothTotal + k401Total + brokerageTotal + hsaTotal;
+  const kinsleyTotal   = sum(groups.k529.kinsley);
+  const kyleTotal      = sum(groups.k529.kyle);
+  const collinsTotal   = sum(groups.k529.collins);
+  const k529Total      = kinsleyTotal + kyleTotal + collinsTotal;
+
+  const acctDetail = accts => accts.map(a =>
+    '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:#6e6e73">' +
+    '<span>' + (a.mapping.label || a.name) + '</span>' +
+    '<span style="font-variant-numeric:tabular-nums">' + fmt(a.balance || 0) + '</span>' +
+    '</div>'
+  ).join('');
+
+  const subCard = (label, total, key, accts, color, sub) => {
+    if (!total && !accts.length) return '';
+    const col = snapshotCollapsed[key];
+    return '<div class="card2" data-sskey="' + key + '" onclick="toggleSnapshotSection(this.dataset.sskey)" style="cursor:pointer">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+        '<div class="card-label">' + label + '</div>' +
+        '<span style="color:#8e8e93;font-size:12px">' + (col ? '›' : '⌄') + '</span>' +
+      '</div>' +
+      '<div class="card-value" style="color:' + (color || '#1c1c1e') + '">' + fmt(total) + '</div>' +
+      (sub ? '<div class="card-sub">' + sub + '</div>' : '') +
+      (!col && accts.length ? '<div style="margin-top:6px;border-top:1px solid #f2f2f7;padding-top:4px">' + acctDetail(accts) + '</div>' : '') +
+      '</div>';
+  };
+
+  let html = '';
+
+  // Retirement
+  const retCol = snapshotCollapsed.retirement;
+  html += '<div data-sskey="retirement" onclick="toggleSnapshotSection(this.dataset.sskey)" style="cursor:pointer">' +
+    '<div class="card2 full" style="margin-bottom:10px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div class="card-label">Retirement</div>' +
+        '<span style="color:#8e8e93;font-size:13px">' + (retCol ? '›' : '⌄') + '</span>' +
+      '</div>' +
+      '<div class="card-value blue" style="font-size:20px">' + fmt(retTotal) + '</div>' +
+      '<div class="card-sub">Tap to ' + (retCol ? 'expand' : 'collapse') + '</div>' +
+    '</div></div>';
+
+  if (!retCol) {
+    html += '<div class="card4" style="margin-bottom:14px">';
+    if (rothTotal > 0)      html += subCard('Roth IRA',   rothTotal,      'roth',      [...groups.roth, ...groups.ira], '#34c759', groups.roth.length + ' account' + (groups.roth.length !== 1 ? 's' : ''));
+    if (k401Total > 0)      html += subCard('401k',       k401Total,      '401k',      groups['401k'],                 '#007aff', groups['401k'].length + ' account' + (groups['401k'].length !== 1 ? 's' : ''));
+    if (brokerageTotal > 0) html += subCard('Brokerage',  brokerageTotal, 'brokerage', groups.brokerage,               '#af52de', groups.brokerage.length + ' account' + (groups.brokerage.length !== 1 ? 's' : ''));
+    if (hsaTotal > 0)       html += subCard('HSA',        hsaTotal,       'hsa',       groups.hsa,                     '#ff9500', '+$6,400/yr');
+    html += '</div>';
+  }
+
+  // 529 Savings
+  if (k529Total > 0) {
+    const s529Col = snapshotCollapsed['529'];
+    html += '<div data-sskey="529" onclick="toggleSnapshotSection(this.dataset.sskey)" style="cursor:pointer">' +
+      '<div class="card2 full" style="margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div class="card-label">529 Savings</div>' +
+          '<span style="color:#8e8e93;font-size:13px">' + (s529Col ? '›' : '⌄') + '</span>' +
+        '</div>' +
+        '<div class="card-value purple" style="font-size:20px">' + fmt(k529Total) + '</div>' +
+        '<div class="card-sub">Tap to ' + (s529Col ? 'expand' : 'collapse') + '</div>' +
+      '</div></div>';
+    if (!s529Col) {
+      html += '<div class="card4" style="margin-bottom:14px">';
+      if (kinsleyTotal > 0) html += subCard('Kinsley', kinsleyTotal, 'kinsley529', groups.k529.kinsley, '#af52de', '8.5 yrs to college');
+      if (kyleTotal > 0)    html += subCard('Kyle',    kyleTotal,    'kyle529',    groups.k529.kyle,    '#af52de', '10.9 yrs to college');
+      if (collinsTotal > 0) html += subCard('Collins', collinsTotal, 'collins529', groups.k529.collins, '#af52de', '14 yrs to college');
+      html += '</div>';
+    }
+  }
+
+  // Credit cards
+  if (groups.credit.length) {
+    html += '<div class="divider" style="margin-top:4px">Credit cards</div><div class="card4" style="margin-bottom:14px">';
+    groups.credit.forEach(a => {
+      html += '<div class="card2"><div class="card-label">' + (a.institution || '') + '</div>' +
+        '<div class="card-value" style="color:#ff3b30">' + fmt(a.balance || 0) + '</div>' +
+        '<div class="card-sub">' + (a.officialName || a.name || '') + '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Other
+  if (groups.other.length) {
+    html += '<div class="divider" style="margin-top:4px">Other</div><div class="card4" style="margin-bottom:14px">';
+    groups.other.forEach(a => {
+      html += '<div class="card2"><div class="card-label">' + (a.mapping.label || a.name || '') + '</div>' +
+        '<div class="card-value">' + fmt(a.balance || 0) + '</div>' +
+        '<div class="card-sub">' + (a.subtype || a.type || '') + '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+// ── BALANCE HISTORY AUTO-SAVE ─────────────────────────────────────────────────
+async function saveBalanceSnapshot(accounts) {
+  if (!accounts.length) return;
+  try {
+    const now = new Date();
+    const monthLabel = now.toLocaleString('en-US', {month:'short'}) + ' ' + now.getFullYear();
+
+    // Remove any existing entries for this month then append new ones
+    const newRows = accounts
+      .filter(a => !a.error && a.balance !== null && a.balance !== undefined)
+      .map(a => {
+        const mapping = getAccountMapping(a);
+        return [monthLabel, mapping.label || a.name, mapping.subtype, a.balance];
+      });
+
+    if (!newRows.length) return;
+
+    // Read existing, filter out this month, rewrite with new values
+    const existing = await readSheet(BUDGET_SHEET_ID, 'BalanceHistory!A:D');
+    const header = ['Date','Account','Type','Balance'];
+    const kept = existing.length > 1
+      ? existing.slice(1).filter(r => r[0] && r[0] !== monthLabel)
+      : [];
+
+    await clearAndWrite(BUDGET_SHEET_ID, 'BalanceHistory!A1', [header, ...kept, ...newRows]);
+
+    // Update in-memory balanceHistory
+    balanceHistory = balanceHistory.filter(b => b.date !== monthLabel);
+    newRows.forEach(r => {
+      const parsed = new Date(r[0] + ' 1');
+      balanceHistory.push({date:r[0], account:r[1], type:r[2].toLowerCase(), balance:r[3], parsedDate:parsed});
+    });
+    balanceHistory.sort((a,b) => a.parsedDate - b.parsedDate);
+    console.log('[BalanceHistory] saved', newRows.length, 'records for', monthLabel);
+  } catch(e) {
+    console.error('BalanceHistory save error:', e.message);
+  }
+}
+
+// ── BALANCE HISTORY CHARTS ────────────────────────────────────────────────────
+let chartRangeRetirement = 'all';
+let chartRange529 = 'all';
+let retirementChartCollapsed = true;
+let chart529Collapsed = true;
+
+function toggleBalanceChart(type) {
+  if (type === 'retirement') retirementChartCollapsed = !retirementChartCollapsed;
+  else chart529Collapsed = !chart529Collapsed;
+  renderBalanceCharts();
+}
+
+function setChartRange(type, range) {
+  if (type === 'retirement') chartRangeRetirement = range;
+  else chartRange529 = range;
+  renderBalanceCharts();
+}
+
+function filterByRange(data, range) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  if (range === 'ytd') cutoff.setMonth(0, 1);
+  else if (range === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+  else if (range === '3y') cutoff.setFullYear(now.getFullYear() - 3);
+  else return data; // all
+  return data.filter(d => d.parsedDate >= cutoff);
+}
+
+function getMonthlyTotals(types, range) {
+  // Sum balances by month for given account types
+  const filtered = filterByRange(balanceHistory.filter(b => types.includes(b.type)), range);
+  const byMonth = {};
+  filtered.forEach(b => {
+    if (!byMonth[b.date]) byMonth[b.date] = {date: b.date, parsedDate: b.parsedDate, total: 0, accounts: {}};
+    byMonth[b.date].total += b.balance;
+    if (!byMonth[b.date].accounts[b.account]) byMonth[b.date].accounts[b.account] = 0;
+    byMonth[b.date].accounts[b.account] += b.balance;
+  });
+  return Object.values(byMonth).sort((a,b) => a.parsedDate - b.parsedDate);
+}
+
+function getAccountSeries(types, range) {
+  const filtered = filterByRange(balanceHistory.filter(b => types.includes(b.type)), range);
+  const accounts = [...new Set(filtered.map(b => b.account))];
+  const dates = [...new Set(filtered.map(b => b.date))].sort((a,b) => new Date(a+' 1') - new Date(b+' 1'));
+  return {accounts, dates, series: accounts.map(acct => ({
+    name: acct,
+    values: dates.map(d => {
+      const entry = filtered.find(b => b.account === acct && b.date === d);
+      return entry ? entry.balance : null;
+    })
+  }))};
+}
+
+function drawBalanceChart(canvasId, labels, series, colors) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.offsetWidth || 340, H = 200;
+  c.width = W * devicePixelRatio; c.height = H * devicePixelRatio;
+  c.style.width = W + 'px'; c.style.height = H + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const allVals = series.flatMap(s => s.values.filter(v => v !== null));
+  if (!allVals.length) {
+    ctx.fillStyle = '#8e8e93'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('No data yet', W/2, H/2);
+    return;
+  }
+
+  const mx = Math.max(...allVals);
+  const mn = Math.min(...allVals) * 0.95;
+  const pad = {l:52, r:8, t:10, b:28};
+  const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+  const x = i => pad.l + (labels.length > 1 ? (i / (labels.length-1)) * cw : cw/2);
+  const y = v => pad.t + ch - ((v - mn) / (mx - mn || 1)) * ch;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 1;
+  [0.25,0.5,0.75,1].forEach(f => {
+    const val = mn + (mx-mn)*f;
+    const yy = y(val);
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W-pad.r, yy); ctx.stroke();
+    ctx.fillStyle = '#8e8e93'; ctx.font = '9px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('$'+(val/1000).toFixed(0)+'k', pad.l-3, yy+3);
+  });
+
+  // X labels — show every other if crowded
+  ctx.fillStyle = '#8e8e93'; ctx.font = '9px -apple-system'; ctx.textAlign = 'center';
+  const step = labels.length > 12 ? Math.ceil(labels.length/12) : 1;
+  labels.forEach((l, i) => {
+    if (i % step === 0) ctx.fillText(l.replace(' 20','\''), x(i), H-8);
+  });
+
+  // Draw each series
+  series.forEach((s, si) => {
+    const color = colors[si % colors.length];
+    ctx.beginPath(); ctx.strokeStyle = color;
+    ctx.lineWidth = si === 0 ? 2.5 : 1.5; // total line is thicker
+    let started = false;
+    s.values.forEach((v, i) => {
+      if (v === null) { started = false; return; }
+      if (!started) { ctx.moveTo(x(i), y(v)); started = true; }
+      else ctx.lineTo(x(i), y(v));
+    });
+    ctx.stroke();
+  });
+}
+
+function renderBalanceCharts() {
+  const el = document.getElementById('balanceCharts');
+  if (!el) return;
+
+  const RETIREMENT_TYPES = ['roth','401k','brokerage','hsa','ira'];
+  const S529_TYPES = ['529'];
+  const RETIREMENT_COLORS = ['#007aff','#34c759','#ff9500','#af52de','#ff3b30','#5856d6'];
+  const S529_COLORS = ['#af52de','#ff9500','#34c759','#007aff'];
+
+  const retData = getMonthlyTotals(RETIREMENT_TYPES, chartRangeRetirement);
+  const s529Data = getMonthlyTotals(S529_TYPES, chartRange529);
+
+  const rangeBtn = (type, range, label, active) =>
+    `<button onclick="setChartRange('${type}','${range}')"
+      style="padding:3px 9px;border-radius:12px;border:none;font-size:11px;font-weight:600;cursor:pointer;
+      background:${active ? '#007aff' : '#f2f2f7'};color:${active ? '#fff' : '#3a3a3c'}">${label}</button>`;
+
+  let html = '';
+
+  // ── RETIREMENT CHART ──
+  const retTotal = retData.length ? retData[retData.length-1].total : 0;
+  html += `<div style="background:#fff;border-radius:14px;margin-bottom:12px;overflow:hidden">
+    <div onclick="toggleBalanceChart('retirement')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:${retirementChartCollapsed?'none':'1px solid #f2f2f7'}">
+      <div>
+        <div style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Retirement growth</div>
+        ${retTotal ? `<div style="font-size:12px;color:#007aff;font-weight:600">${fmt(retTotal)} current</div>` : ''}
+      </div>
+      <span style="color:#8e8e93;font-size:14px">${retirementChartCollapsed ? '›' : '⌄'}</span>
+    </div>`;
+
+  if (!retirementChartCollapsed) {
+    const retSeries = getAccountSeries(RETIREMENT_TYPES, chartRangeRetirement);
+    const retLabels = retData.map(d => d.date);
+    const totalSeries = [{name:'Total', values: retLabels.map(l => retData.find(d=>d.date===l)?.total || null)}];
+    const allSeries = [...totalSeries, ...retSeries.series];
+
+    html += `<div style="padding:12px 16px">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        ${rangeBtn('retirement','ytd','YTD', chartRangeRetirement==='ytd')}
+        ${rangeBtn('retirement','1y','1Y',  chartRangeRetirement==='1y')}
+        ${rangeBtn('retirement','3y','3Y',  chartRangeRetirement==='3y')}
+        ${rangeBtn('retirement','all','All',chartRangeRetirement==='all')}
+      </div>
+      <canvas id="retChart" style="width:100%;height:200px"></canvas>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        ${allSeries.map((s,i) => `<span style="font-size:10px;color:${RETIREMENT_COLORS[i%RETIREMENT_COLORS.length]}">● ${s.name}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // ── 529 CHART ──
+  const s529Total = s529Data.length ? s529Data[s529Data.length-1].total : 0;
+  html += `<div style="background:#fff;border-radius:14px;margin-bottom:12px;overflow:hidden">
+    <div onclick="toggleBalanceChart('529')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:${chart529Collapsed?'none':'1px solid #f2f2f7'}">
+      <div>
+        <div style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">529 growth</div>
+        ${s529Total ? `<div style="font-size:12px;color:#af52de;font-weight:600">${fmt(s529Total)} current</div>` : ''}
+      </div>
+      <span style="color:#8e8e93;font-size:14px">${chart529Collapsed ? '›' : '⌄'}</span>
+    </div>`;
+
+  if (!chart529Collapsed) {
+    const s529Series = getAccountSeries(S529_TYPES, chartRange529);
+    const s529Labels = s529Data.map(d => d.date);
+    const total529Series = [{name:'Total 529s', values: s529Labels.map(l => s529Data.find(d=>d.date===l)?.total || null)}];
+    const all529Series = [...total529Series, ...s529Series.series];
+
+    html += `<div style="padding:12px 16px">
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        ${rangeBtn('529','ytd','YTD', chartRange529==='ytd')}
+        ${rangeBtn('529','1y','1Y',   chartRange529==='1y')}
+        ${rangeBtn('529','3y','3Y',   chartRange529==='3y')}
+        ${rangeBtn('529','all','All', chartRange529==='all')}
+      </div>
+      <canvas id="s529Chart" style="width:100%;height:200px"></canvas>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        ${all529Series.map((s,i) => `<span style="font-size:10px;color:${S529_COLORS[i%S529_COLORS.length]}">● ${s.name}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+
+  // Draw charts after DOM update
+  if (!retirementChartCollapsed) {
+    const retSeries2 = getAccountSeries(RETIREMENT_TYPES, chartRangeRetirement);
+    const retLabels2 = retData.map(d => d.date);
+    const totalS = [{name:'Total', values: retLabels2.map(l => retData.find(d=>d.date===l)?.total||null)}];
+    drawBalanceChart('retChart', retLabels2, [...totalS,...retSeries2.series], RETIREMENT_COLORS);
+  }
+  if (!chart529Collapsed) {
+    const s529Series2 = getAccountSeries(S529_TYPES, chartRange529);
+    const s529Labels2 = s529Data.map(d => d.date);
+    const total529S = [{name:'Total 529s', values: s529Labels2.map(l => s529Data.find(d=>d.date===l)?.total||null)}];
+    drawBalanceChart('s529Chart', s529Labels2, [...total529S,...s529Series2.series], S529_COLORS);
+  }
+}
+// ── WINDFALL ──────────────────────────────────────────────────────────────────
+function renderWindfall() {
+  const year = windfallYears[windfallYearIdx] || 2026;
+
+  // Get allocations from planConfig (loaded from Windfall sheet tab), sorted by priority
+  const ALLOC_KEYS = [
+    {key:'windfall_christmas',   label:'Christmas fund'},
+    {key:'windfall_roth_eric',   label:'Eric Roth IRA'},
+    {key:'windfall_roth_mattie', label:'Mattie Roth IRA'},
+    {key:'windfall_vacation',    label:'Vacation fund'},
+    {key:'windfall_home',        label:'Home projects'},
+    {key:'windfall_car_mattie',  label:"Mattie's car boost"},
+    {key:'windfall_emergency',   label:'Emergency boost'},
+  ];
+
+  const allocations = ALLOC_KEYS.map(a => ({
+    ...a,
+    amount: parseFloat((planConfig[a.key] || '0').replace(/[$,]/g,'')) || 0,
+  })).filter(a => a.amount > 0);
+
+  const totalAlloc = allocations.reduce((s, a) => s + a.amount, 0);
+
+  // Get inflows for this year from windfallLog
+  const inflows = windfallLog.filter(w => w.year === year);
+  const totalIn  = inflows.reduce((s, w) => s + w.amount, 0);
+
+  // Apply inflows to allocations in priority order
+  let remaining = totalIn;
+  const funded = allocations.map(a => {
+    const f = Math.min(a.amount, Math.max(0, remaining));
+    remaining -= f;
+    return {...a, funded: f, pct: a.amount > 0 ? f / a.amount : 0};
+  });
+
+  // Year tabs
+  const yearTabs = windfallYears.map((y, i) =>
+    `<div class="month-btn ${i === windfallYearIdx ? 'active' : ''}"
+      onclick="selectWindfallYear(${i})" style="cursor:pointer">${y}</div>`
+  ).join('');
+
+  const addYearBtn = `<div class="add-month-btn" onclick="addWindfallYear()" style="cursor:pointer">+ ${(windfallYears[windfallYears.length-1]||2026)+1}</div>`;
+
+  let html = '';
+
+  // Year nav
+  html += `<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    ${yearTabs}${addYearBtn}
+  </div>`;
+
+  // Inflows section
+  html += `<div class="divider" style="display:flex;justify-content:space-between;align-items:center">
+    <span>Inflows</span>
+    <button class="btn-xs btn-add" style="font-size:11px;padding:3px 10px" onclick="openAddWindfall(${year})">+ Add</button>
+  </div>`;
+
+  html += '<div class="block">';
+  if (inflows.length) {
+    inflows.forEach((w, wi) => {
+      const dateDisplay = w.date && w.date.length === 10
+        ? new Date(w.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'})
+        : w.date || 'TBD';
+      html += `<div class="row" style="padding:10px 16px">
+        <div>
+          <div class="row-label">${w.source}</div>
+          <div class="row-sub">${dateDisplay}${w.notes ? ' · ' + w.notes : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="row-val green">${fmt(w.amount)}</div>
+          <button onclick="deleteWindfall(${wi})" style="background:none;border:none;color:#ff3b30;font-size:14px;cursor:pointer;padding:0">&#xD7;</button>
+        </div>
+      </div>`;
+    });
+    html += `<div style="display:flex;justify-content:space-between;padding:10px 16px;background:#f9f9f9;font-weight:600;font-size:14px;border-top:1px solid #f2f2f7">
+      <span>Total received</span><span style="color:#34c759">${fmt(totalIn)}</span>
+    </div>`;
+    if (totalIn < totalAlloc) {
+      const expected = totalAlloc - totalIn;
+      html += `<div style="display:flex;justify-content:space-between;padding:8px 16px;font-size:13px;color:#8e8e93">
+        <span>Remaining to receive</span><span>${fmt(expected)}</span>
+      </div>`;
+    }
+  } else {
+    html += `<div style="padding:16px;font-size:13px;color:#8e8e93;text-align:center">No inflows logged for ${year} yet. Tap + Add to log one.</div>`;
+  }
+  html += '</div>';
+
+  // Allocation plan section
+  html += `<div class="divider" style="display:flex;justify-content:space-between;align-items:center">
+    <span>Allocation plan</span>
+    <span style="font-size:12px;color:#8e8e93">Priority order</span>
+  </div>`;
+
+  html += '<div class="block">';
+  funded.forEach(a => {
+    const barWidth = Math.min(Math.round(a.pct * 100), 100);
+    const barColor = a.pct >= 1 ? '#34c759' : a.pct > 0 ? '#007aff' : '#e5e5ea';
+    const statusLabel = a.pct >= 1
+      ? `<span style="font-size:11px;color:#34c759;font-weight:600">✓ Funded</span>`
+      : a.pct > 0
+      ? `<span style="font-size:11px;color:#007aff">${Math.round(a.pct*100)}% funded</span>`
+      : `<span style="font-size:11px;color:#8e8e93">Unfunded</span>`;
+
+    html += `<div style="padding:10px 16px;border-bottom:1px solid #f2f2f7">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <div>
+          <div style="font-size:14px;font-weight:500">${a.label}</div>
+          ${statusLabel}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:600">${fmt(a.amount)}</div>
+          ${a.funded > 0 && a.funded < a.amount
+            ? `<div style="font-size:11px;color:#8e8e93">${fmt(a.funded)} of ${fmt(a.amount)}</div>`
+            : ''}
+        </div>
+      </div>
+      <div style="background:#e5e5ea;border-radius:4px;height:6px;overflow:hidden">
+        <div style="width:${barWidth}%;background:${barColor};height:100%;border-radius:4px;transition:width .3s"></div>
+      </div>
+    </div>`;
+  });
+
+  html += `<div style="display:flex;justify-content:space-between;padding:12px 16px;background:#f9f9f9;font-weight:600;font-size:14px;border-top:1px solid #f2f2f7">
+    <span>Total allocated</span><span>${fmt(totalAlloc)}</span>
+  </div>`;
+
+  if (totalIn > totalAlloc) {
+    html += `<div style="display:flex;justify-content:space-between;padding:8px 16px;font-size:13px;color:#34c759;font-weight:600">
+      <span>Surplus (unallocated)</span><span>${fmt(totalIn - totalAlloc)}</span>
+    </div>`;
+  }
+  html += '</div>';
+
+  document.getElementById('windfallContent').innerHTML = html;
+}
+
+function selectWindfallYear(i) {
+  windfallYearIdx = i;
+  renderWindfall();
+}
+
+function addWindfallYear() {
+  const nextYear = (windfallYears[windfallYears.length - 1] || 2026) + 1;
+  if (!windfallYears.includes(nextYear)) windfallYears.push(nextYear);
+  windfallYearIdx = windfallYears.length - 1;
+  renderWindfall();
+}
+
+// Add windfall modal (reuse the main modal)
+function openAddWindfall(year) {
+  modalCtx = {type: 'windfall', year};
+  document.getElementById('modalAddTitle').textContent = 'Log windfall inflow';
+  document.getElementById('addRows').innerHTML = `
+    <label style="font-size:13px;color:#6e6e73;margin-top:10px;display:block">Source</label>
+    <input type="text" id="wfSource" placeholder="e.g. Eric bonus, Mattie extra check" style="width:100%;border:1.5px solid #d1d1d6;border-radius:10px;padding:11px 14px;font-size:15px;margin-top:4px">
+    <label style="font-size:13px;color:#6e6e73;margin-top:10px;display:block">Amount</label>
+    <input type="number" id="wfAmount" placeholder="0.00" step="0.01" min="0"
+      style="width:100%;border:1.5px solid #d1d1d6;border-radius:10px;padding:11px 14px;font-size:15px;margin-top:4px"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();saveWindfall()}">
+    <label style="font-size:13px;color:#6e6e73;margin-top:10px;display:block">Date</label>
+    <input type="date" id="wfDate" style="width:100%;border:1.5px solid #d1d1d6;border-radius:10px;padding:11px 14px;font-size:15px;margin-top:4px">
+    <label style="font-size:13px;color:#6e6e73;margin-top:10px;display:block">Notes (optional)</label>
+    <input type="text" id="wfNotes" placeholder="e.g. Annual bonus" style="width:100%;border:1.5px solid #d1d1d6;border-radius:10px;padding:11px 14px;font-size:15px;margin-top:4px">
+  `;
+  document.getElementById('addRemaining').style.display = 'none';
+  document.getElementById('addDesc').style.display = 'none';
+  document.getElementById('modalAdd').classList.add('open');
+  setTimeout(() => document.getElementById('wfSource')?.focus(), 100);
+}
+
+function saveWindfall() {
+  if (!modalCtx || modalCtx.type !== 'windfall') return;
+  const source = document.getElementById('wfSource')?.value?.trim();
+  const amount = parseFloat(document.getElementById('wfAmount')?.value);
+  const date   = document.getElementById('wfDate')?.value || '';
+  const notes  = document.getElementById('wfNotes')?.value?.trim() || '';
+  if (!source || !amount) return;
+
+  windfallLog.push({year: modalCtx.year, date, source, amount, notes});
+  windfallLog.sort((a, b) => a.year - b.year || a.date.localeCompare(b.date));
+  scheduleSave();
+  document.getElementById('addDesc').style.display = '';
+  closeModal();
+  renderWindfall();
+}
+
+function deleteWindfall(logIdx) {
+  // Find the actual index in windfallLog for the current year
+  const year = windfallYears[windfallYearIdx];
+  const yearItems = windfallLog.filter(w => w.year === year);
+  const item = yearItems[logIdx];
+  if (!item) return;
+  const globalIdx = windfallLog.indexOf(item);
+  if (globalIdx !== -1) windfallLog.splice(globalIdx, 1);
+  scheduleSave();
+  renderWindfall();
+}
+
+// ── GOALS ─────────────────────────────────────────────────────────────────────
+function renderGoals() {
+  const p = planConfig;
+  const block = (color, title, badge, content) =>
+    `<div class="block"><div class="block-header"><div class="accent" style="background:${color}"></div><div class="block-title">${title}</div>${badge ? `<div class="badge ${badge[1]}" style="margin-left:auto">${badge[0]}</div>` : ''}</div>${content}</div>`;
+  const row = (label, val, sub, valClass) =>
+    `<div class="row"><div class="row-label">${label}${sub ? `<div class="row-sub">${sub}</div>` : ''}</div><div class="row-val${valClass ? ' ' + valClass : ''}">${val}</div></div>`;
+
+  document.getElementById('goalsContent').innerHTML =
+    block('#007aff', 'Emergency fund', ['In progress', 'badge-orange'],
+      row('Current balance', p['emergency_balance'] || '$17,500', null, 'orange') +
+      row('Target (6 months)', p['emergency_target'] || '$78,000') +
+      row('Est. fully funded', '~Sep 2032 ✓', null, 'green') +
+      `<div class="progress-wrap"><div class="progress-labels"><span>Progress</span><span>22%</span></div>
+       <div class="bar-bg2"><div style="width:22%;background:#007aff;height:100%;border-radius:6px"></div></div></div>`) +
+
+    block('#ff6b35', "Mattie's procedures", ['~13 months', 'badge-orange'],
+      row('Monthly saving', '$1,250/mo') +
+      row('Funded by', '~Jul 2027 ✓', null, 'green')) +
+
+    block('#ff9500', "Mattie's new SUV", ['Dec 2028', 'badge-green'],
+      row('Purchasing power', '~$65,678', null, 'green') +
+      `<div class="note-green" style="margin:0 16px 14px;border-radius:8px">New Suburban/Expedition Max: Fully funded ✓</div>`) +
+
+    block('#185fa5', "Eric's new car", ['Jan 2029', 'badge-blue'],
+      row('$1,000/mo · $40k net gap', '~May 2032 ✓', null, 'green')) +
+
+    block('#ff3b30', "Kids' cars ($24k each)", ['Brokerage', 'badge-blue'],
+      row('Kinsley', '$152/mo', 'Dec 2032') +
+      row('Kyle', '$162/mo', 'May 2035') +
+      row('Collins', '$106/mo', 'Jul 2038')) +
+
+    block('#ff2d55', 'Weddings ($50k each)', ['Brokerage', 'badge-blue'],
+      row('Kinsley', '$167/mo', '~Dec 2040') +
+      row('Collins', '$96/mo', '~Jul 2046')) +
+
+    block('#af52de', '529s at age 18', ['Projected 7%', 'badge-purple'],
+      row('Kinsley ($325/mo)', '~$72,300', null, 'purple') +
+      row('Kyle ($200/mo)', '~$72,600', null, 'purple') +
+      row('Collins ($225/mo)', '~$72,000', null, 'purple'));
+}
+// ── INSIGHTS TAB ──────────────────────────────────────────────────────────────
+let insightsView = 'eric'; // 'eric' or 'mattie'
+
+function renderInsights() {
+  const el = document.getElementById('insightsContent');
+  if (!el) return;
+
+  const lastRunStr = lastInsights ? lastInsights.timestamp : null;
+
+  el.innerHTML =
+    // Header with analyze button and view toggle
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+      '<div style="display:flex;gap:6px">' +
+        '<button onclick="runInsights()" id="insightsBtn" class="btn-xs btn-add" style="font-size:13px;padding:8px 18px">&#128161; Analyze</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        `<button onclick="setInsightsView('eric')" style="padding:4px 12px;border-radius:12px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${insightsView==='eric'?'#007aff':'#f2f2f7'};color:${insightsView==='eric'?'#fff':'#3a3a3c'}">Eric</button>` +
+        `<button onclick="setInsightsView('mattie')" style="padding:4px 12px;border-radius:12px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${insightsView==='mattie'?'#007aff':'#f2f2f7'};color:${insightsView==='mattie'?'#fff':'#3a3a3c'}">Mattie</button>` +
+      '</div>' +
+    '</div>' +
+    (lastRunStr ? `<div style="font-size:11px;color:#8e8e93;margin-bottom:12px">Last analyzed: ${lastRunStr}</div>` : '') +
+    '<div id="insightsBody">' +
+      (lastInsights
+        ? renderInsightsBody()
+        : '<div style="text-align:center;padding:40px 20px;color:#8e8e93">' +
+            '<div style="font-size:32px;margin-bottom:12px">&#128161;</div>' +
+            '<div style="font-size:15px;font-weight:600;margin-bottom:8px">No analysis yet</div>' +
+            '<div style="font-size:13px">Tap Analyze to generate personalized insights based on your spending history and goals.</div>' +
+          '</div>')
+    + '</div>';
+}
+
+function setInsightsView(view) {
+  insightsView = view;
+  renderInsights();
+}
+
+function renderInsightsBody() {
+  if (!lastInsights) return '';
+  const content = insightsView === 'eric' ? lastInsights.eric : lastInsights.mattie;
+  if (!content) return '<div style="color:#8e8e93;text-align:center;padding:20px">No content available</div>';
+
+  // Parse Claude's response into sections
+  // Claude returns structured markdown-ish text with section headers
+  const sections = parseInsightsSections(content);
+
+  return sections.map(s => `
+    <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:${s.color};margin-bottom:10px">${s.icon} ${s.title}</div>
+      <div style="font-size:14px;line-height:1.6;color:#3a3a3c">${s.body}</div>
+    </div>`
+  ).join('');
+}
+
+function parseInsightsSections(text) {
+  // Split by section markers Claude uses
+  const sectionDefs = [
+    {key:'QUICK WIN',       title:'Quick Win',            icon:'⚡',  color:'#34c759'},
+    {key:'SPENDING',        title:'Spending Observations', icon:'📊',  color:'#007aff'},
+    {key:'RECURRING',       title:'Recurring Charges',    icon:'🔄',  color:'#ff9500'},
+    {key:'SAVINGS',         title:'Savings & Goals',      icon:'🎯',  color:'#af52de'},
+    {key:'BIG MOVE',        title:'Big Move',             icon:'🚀',  color:'#ff3b30'},
+  ];
+
+  const sections = [];
+  let remaining = text;
+
+  sectionDefs.forEach(def => {
+    const regex = new RegExp(`(?:##?\\s*)?${def.key}[:\\s]*(.*?)(?=(?:##?\\s*)?(?:${sectionDefs.map(d=>d.key).join('|')})|$)`, 'si');
+    const match = remaining.match(regex);
+    if (match && match[1]?.trim()) {
+      sections.push({
+        ...def,
+        body: formatInsightsText(match[1].trim())
+      });
+    }
+  });
+
+  // If no sections parsed, show raw text
+  if (!sections.length) {
+    sections.push({title:'Analysis', icon:'💡', color:'#007aff', body: formatInsightsText(text)});
+  }
+
+  return sections;
+}
+
+function formatInsightsText(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^[-•]\s+/gm, '• ')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>')
+    .replace(/$/, '</p>');
+}
+
+async function saveInsights() {
+  if (!lastInsights) return;
+  try {
+    await clearAndWrite(BUDGET_SHEET_ID, 'Insights!A1', [
+      ['Key', 'Value'],
+      ['timestamp', lastInsights.timestamp],
+      ['eric',      lastInsights.eric],
+      ['mattie',    lastInsights.mattie],
+    ]);
+  } catch(e) { console.error('Insights save error:', e.message); }
+}
+
+async function loadInsights() {
+  try {
+    const rows = await readSheet(BUDGET_SHEET_ID, 'Insights!A:B');
+    if (rows.length < 2) return;
+    const data = {};
+    rows.slice(1).forEach(r => { if (r[0]) data[r[0]] = r[1] || ''; });
+    if (data.eric && data.mattie) {
+      lastInsights = {eric: data.eric, mattie: data.mattie, timestamp: data.timestamp || ''};
+    }
+  } catch(e) { console.log('Insights tab not found:', e.message); }
+}
+
+async function runInsights() {
+  const btn = document.getElementById('insightsBtn');
+  if (btn) { btn.textContent = '⏳ Analyzing...'; btn.disabled = true; }
+
+  try {
+    // Build spending summary from transaction data
+    const summary = buildSpendingSummary();
+    if (!summary) {
+      document.getElementById('insightsBody').innerHTML =
+        '<div style="color:#ff3b30;padding:16px">Not enough transaction data yet. Add some transactions first.</div>';
+      if (btn) { btn.textContent = '💡 Analyze'; btn.disabled = false; }
+      return;
+    }
+
+    // Call Claude API twice — once for each view
+    const [ericResult, mattieResult] = await Promise.all([
+      callClaudeInsights(summary, 'eric'),
+      callClaudeInsights(summary, 'mattie'),
+    ]);
+
+    lastInsights = {
+      eric:      ericResult,
+      mattie:    mattieResult,
+      timestamp: new Date().toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}),
+    };
+
+    // Persist to Google Sheet
+    await saveInsights();
+
+    renderInsights();
+  } catch(e) {
+    console.error('Insights error:', e);
+    document.getElementById('insightsBody').innerHTML =
+      `<div style="color:#ff3b30;padding:16px">Analysis failed: ${e.message}</div>`;
+  }
+
+  if (btn) { btn.textContent = '💡 Analyze'; btn.disabled = false; }
+}
+
+function buildSpendingSummary() {
+  const months = Object.keys(trackerData.transactions || {}).sort();
+  if (!months.length) return null;
+
+  const recentMonth = months[months.length - 1];
+  const prevMonths  = months.slice(-4, -1); // up to 3 prior months
+
+  // Current month spending by category
+  const currentSpend = {};
+  const currentBudget = {};
+  budgetPlan.forEach(cat => {
+    const txns = getTxns(trackerIdx, cat.Category);
+    const actual = txns.reduce((s,t) => s+t.amt, 0);
+    if (actual > 0 || getBudget(trackerIdx, cat.Category) > 0) {
+      currentSpend[cat.Category]  = actual;
+      currentBudget[cat.Category] = getBudget(trackerIdx, cat.Category);
+    }
+  });
+
+  // Historical averages by category
+  const historicalAvg = {};
+  budgetPlan.forEach(cat => {
+    const totals = prevMonths.map(m => {
+      const txns = (trackerData.transactions[m]?.[cat.Category] || []);
+      return txns.reduce((s,t) => s+t.amt, 0);
+    }).filter(v => v > 0);
+    if (totals.length) historicalAvg[cat.Category] = totals.reduce((s,v)=>s+v,0)/totals.length;
+  });
+
+  // Recurring merchants — appear in 2+ months
+  const merchantMonths = {};
+  months.forEach(m => {
+    const allTxns = Object.values(trackerData.transactions[m]||{}).flat();
+    allTxns.forEach(t => {
+      if (!merchantMonths[t.desc]) merchantMonths[t.desc] = new Set();
+      merchantMonths[t.desc].add(m);
+    });
+  });
+  const recurring = Object.entries(merchantMonths)
+    .filter(([,s]) => s.size >= 2)
+    .map(([merchant, monthSet]) => {
+      // Get latest amount
+      let amt = 0;
+      for (const m of [...monthSet].sort().reverse()) {
+        const allTxns = Object.values(trackerData.transactions[m]||{}).flat();
+        const t = allTxns.find(t => t.desc === merchant);
+        if (t) { amt = t.amt; break; }
+      }
+      return {merchant, months: monthSet.size, amount: amt};
+    })
+    .sort((a,b) => b.amount - a.amount)
+    .slice(0, 15);
+
+  // Savings goal progress
+  const goals = [];
+  const savingsCats = budgetPlan.filter(c => c.isSavings || SAVING_SECTIONS.includes(c.Section));
+  savingsCats.forEach(cat => {
+    const monthly = getBudget(trackerIdx, cat.Category);
+    if (monthly > 0) goals.push({category: cat.Category, monthly, section: cat.Section});
+  });
+
+  // Income
+  const income = getIncome(trackerIdx);
+
+  // Balance history summary for goals
+  const latestBalances = {};
+  balanceHistory.forEach(b => { latestBalances[b.account] = b.balance; });
+
+  return {
+    recentMonth,
+    prevMonths,
+    income: income.total,
+    currentSpend,
+    currentBudget,
+    historicalAvg,
+    recurring,
+    goals,
+    latestBalances,
+    monthsOfData: months.length,
+    // Key goal context
+    goalContext: {
+      emergencyBalance: parseFloat((planConfig['emergency_balance']||'0').replace(/[$,]/g,'')),
+      emergencyTarget:  parseFloat((planConfig['emergency_target']||'0').replace(/[$,]/g,'')),
+      retirementTotal:  parseFloat((planConfig['balance_retirement_total']||'0').replace(/[$,]/g,'')),
+      kinsley529:       latestBalances['Kinsley 529'] || parseFloat((planConfig['529_kinsley']||'0').replace(/[$,]/g,'')),
+      kyle529:          latestBalances['Kyle 529'] || parseFloat((planConfig['529_kyle']||'0').replace(/[$,]/g,'')),
+      collins529:       latestBalances['Collins 529'] || parseFloat((planConfig['529_collins']||'0').replace(/[$,]/g,'')),
+    },
+    // Future goals timeline
+    futureGoals: [
+      {name:"Mattie's SUV", targetDate:'Dec 2028', monthlyContrib: parseFloat((planConfig['windfall_car_mattie']||'1463').replace(/[$,]/g,''))},
+      {name:'Emergency fund', targetDate:'Sep 2032', targetAmt: parseFloat((planConfig['emergency_target']||'78000').replace(/[$,]/g,''))},
+      {name:"Eric's car", targetDate:'Jan 2029'},
+    ],
+  };
+}
+
+async function callClaudeInsights(summary, view) {
+  const isEric = view === 'eric';
+
+  const systemPrompt = isEric
+    ? `You are a direct, numbers-focused financial advisor for the Givens family. Eric is your audience — he wants specific dollar amounts, percentages, and dates. Be concise and actionable. Use bullet points. Lead with numbers.`
+    : `You are a warm, conversational financial advisor for the Givens family. Mattie is your audience — she appreciates context, explanation, and encouragement. Write in full sentences with empathy. Explain the "why" behind recommendations.`;
+
+  const userPrompt = `Analyze this family's financial data and provide insights. They are a family of 5 (Eric, Mattie, kids: Kinsley age 9, Kyle age 7, Collins age 4) with ${summary.monthsOfData} month(s) of transaction data.
+
+CURRENT MONTH: ${summary.recentMonth}
+Monthly take-home income: $${summary.income.toFixed(2)}
+
+SPENDING vs BUDGET (current month):
+${Object.entries(summary.currentSpend).map(([cat, actual]) => {
+  const budget = summary.currentBudget[cat] || 0;
+  const diff = actual - budget;
+  const avg = summary.historicalAvg[cat];
+  return `${cat}: spent $${actual.toFixed(2)} / budget $${budget.toFixed(2)} ${diff > 0 ? '(OVER by $'+diff.toFixed(2)+')' : diff < 0 ? '(under by $'+Math.abs(diff).toFixed(2)+')' : '(on budget)'}${avg ? ` | ${summary.prevMonths.length}mo avg: $${avg.toFixed(2)}` : ''}`;
+}).join('\n')}
+
+RECURRING CHARGES (appearing in 2+ months):
+${summary.recurring.map(r => `${r.merchant}: $${r.amount.toFixed(2)}/mo (seen ${r.months} months)`).join('\n')}
+
+SAVINGS GOALS:
+${summary.goals.map(g => `${g.category}: $${g.monthly}/mo (${g.section})`).join('\n')}
+
+KEY BALANCES:
+- Emergency fund: $${summary.goalContext.emergencyBalance.toLocaleString()} / $${summary.goalContext.emergencyTarget.toLocaleString()} target (est. funded Sep 2032)
+- Retirement total: $${summary.goalContext.retirementTotal.toLocaleString()}
+- Kinsley 529: $${summary.goalContext.kinsley529.toLocaleString()} (8.5 yrs to college)
+- Kyle 529: $${summary.goalContext.kyle529.toLocaleString()} (10.9 yrs to college)
+- Collins 529: $${summary.goalContext.collins529.toLocaleString()} (14 yrs to college)
+
+FUTURE GOALS:
+${summary.futureGoals.map(g => `${g.name}: target ${g.targetDate}${g.targetAmt ? ', need $'+g.targetAmt.toLocaleString() : ''}`).join('\n')}
+
+Note: Only ${summary.monthsOfData} month(s) of data available — acknowledge limitations in pattern detection where relevant.
+
+Respond with exactly these 5 sections using these exact headers:
+## QUICK WIN
+(One specific actionable thing they can do this month)
+
+## SPENDING OBSERVATIONS
+(3-5 observations about spending patterns, over-budget categories, or trends)
+
+## RECURRING CHARGES
+(Review of recurring charges — flag anything that looks like a forgotten subscription or could be reduced)
+
+## SAVINGS & GOALS
+(Assessment of savings goal progress, specific recommendations to hit goals faster or optimize contributions)
+
+## BIG MOVE
+(The single highest-impact financial change available to them right now)`;
+
+  // Call through Vercel proxy — API key stays secure on server
+  const response = await fetch(PLAID_SERVER + '/api/insights', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({systemPrompt, userPrompt}),
+  });
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  return data.content || '';
+}
+// ── RETIREMENT ────────────────────────────────────────────────────────────────
+function renderRetirement() {
+  const p = planConfig;
+  document.getElementById('retirementContent').innerHTML =
+    `<div class="note"><b>${p['balance_retirement_total'] || '$449,000'}</b> current &middot; <b>${p['invested_annual'] || '$70,874'}/yr</b> contributions growing 3%/yr &middot; Monte Carlo: 1,000 scenarios (mean 9%, std 15%).</div>` +
+    `<div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:600">Monte Carlo Simulation</div>
+          <div style="font-size:12px;color:#8e8e93">1,000 randomized return sequences</div>
+        </div>
+        <button onclick="runMonteCarlo()" style="background:#007aff;color:#fff;border:none;border-radius:20px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer">&#9654; Run</button>
+      </div>
+      <div id="mcStatus" style="font-size:13px;color:#8e8e93">Tap Run to simulate 1,000 scenarios.</div>
+    </div>` +
+    `<div id="mcResults" style="display:none">
+      <div class="divider">Portfolio at milestone ages</div>
+      <div id="mcCards" class="ret-grid"></div>
+      <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Portfolio growth by percentile</div>
+        <canvas id="mcChart" width="340" height="200" style="width:100%;height:200px"></canvas>
+        <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span style="font-size:11px;color:#ff3b30">&#9679; 10th</span>
+          <span style="font-size:11px;color:#ff9500">&#9679; 25th</span>
+          <span style="font-size:11px;color:#007aff;font-weight:600">&#9679; Median</span>
+          <span style="font-size:11px;color:#34c759">&#9679; 75th</span>
+          <span style="font-size:11px;color:#af52de">&#9679; 90th</span>
+        </div>
+      </div>
+      <div class="divider">Retirement income &middot; 4.7% withdrawal</div>
+      <div id="mcIncome"></div>
+      <div class="divider">Social Security</div>
+      <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:14px">
+        <div style="font-size:13px;color:#8e8e93;margin-bottom:12px">Verify estimates at <a href="https://ssa.gov/myaccount" style="color:#007aff">ssa.gov/myaccount</a></div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:8px">Eric</div>
+          <div style="display:flex;gap:8px">
+            <button class="ss-btn" id="eric-65" onclick="setSS('eric',65)">65</button>
+            <button class="ss-btn" id="eric-67" onclick="setSS('eric',67)">67 (FRA)</button>
+            <button class="ss-btn ss-active" id="eric-70" onclick="setSS('eric',70)">70 &#9733;</button>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:8px">Mattie</div>
+          <div style="display:flex;gap:8px">
+            <button class="ss-btn ss-active" id="mattie-65" onclick="setSS('mattie',65)">65 &#9733;</button>
+            <button class="ss-btn" id="mattie-67" onclick="setSS('mattie',67)">67 (FRA)</button>
+            <button class="ss-btn" id="mattie-70" onclick="setSS('mattie',70)">70</button>
+          </div>
+        </div>
+        <div id="ssResults"></div>
+      </div>
+    </div>` +
+    `<div class="block">
+      <div class="block-header"><div class="accent" style="background:#007aff"></div><div class="block-title">Annual investments</div></div>
+      <div class="row"><div class="row-label">401k (both)</div><div class="row-val">${p['contrib_401k'] || '$31,897'}</div></div>
+      <div class="row"><div class="row-label">Employer match</div><div class="row-val green">${p['contrib_match'] || '$17,282'}</div></div>
+      <div class="row"><div class="row-label">Backdoor Roth IRAs</div><div class="row-val">${p['contrib_roth_ira'] || '$15,000'}</div></div>
+      <div class="row"><div class="row-label">HSA</div><div class="row-val">${p['hsa_annual'] || '$6,694'}</div></div>
+      <div class="row"><div class="row-label" style="font-weight:600">Year 1 total</div><div class="row-val blue" style="font-weight:600">${p['invested_annual'] || '$70,874'}</div></div>
+    </div>`;
+  updateSSResults();
+}
+
+// ── MONTE CARLO ───────────────────────────────────────────────────────────────
+function gaussRandom(mean, std) {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return mean + std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function runMonteCarlo() {
+  const btn = document.querySelector('button[onclick="runMonteCarlo()"]');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  setTimeout(() => {
+    const p = planConfig;
+    const START   = parseFloat((p['balance_retirement_total'] || '449000').replace(/[$,]/g, ''));
+    const CONTRIB = parseFloat((p['invested_annual'] || '70874').replace(/[$,]/g, ''));
+    const SIMS = 1000, YEARS = 29, CG = 0.03, MEAN = 0.09, STD = 0.15;
+
+    const finalBals = [];
+    const yd = Array.from({length: YEARS}, () => []);
+    for (let s = 0; s < SIMS; s++) {
+      let b = START;
+      for (let y = 0; y < YEARS; y++) {
+        b = b * (1 + gaussRandom(MEAN, STD)) + CONTRIB * Math.pow(1 + CG, y);
+        yd[y].push(b);
+      }
+      finalBals.push(b);
+    }
+    finalBals.sort((a, b) => a - b);
+
+    const pct = (arr, p) => arr[Math.floor(arr.length * p)];
+    const fm  = n => '$' + (n / 1e6).toFixed(2) + 'M';
+    const fi  = n => '$' + Math.round(n * 0.047 / 12).toLocaleString() + '/mo';
+
+    const milestones = [
+      {l:'Eric 60',  y:23}, {l:'Eric 62',  y:25}, {l:'Eric 65', y:28},
+      {l:'Mattie 60',y:24}, {l:'Mattie 62',y:26}, {l:'Mattie 65',y:29},
+    ];
+    const meds = milestones.map(m => {
+      const a = [...yd[m.y - 1]].sort((a, b) => a - b);
+      return pct(a, 0.5);
+    });
+
+    document.getElementById('mcCards').innerHTML = milestones.map((m, i) =>
+      `<div class="ret-card"><div class="ret-age">${m.l}</div><div class="ret-val">${fm(meds[i])}</div></div>`
+    ).join('');
+
+    const med65 = meds[2]; // Eric 65
+    const sorted = [...yd[YEARS - 1]].sort((a, b) => a - b);
+    const p10 = pct(sorted, 0.1);
+    const p90 = pct(sorted, 0.9);
+
+    document.getElementById('mcIncome').innerHTML =
+      `<span id="mcPM" data-m="${Math.round(med65 * 0.047 / 12)}" style="display:none"></span>` +
+      `<div class="block">
+        <div class="block-header">
+          <div class="accent" style="background:#34c759"></div>
+          <div class="block-title">4.7% withdrawal &middot; Eric 65</div>
+          <div class="badge badge-green" style="margin-left:auto">Median</div>
+        </div>
+        <div class="row"><div class="row-label">Portfolio (median)</div><div class="row-val blue">${fm(med65)}</div></div>
+        <div class="row"><div class="row-label">Monthly income</div><div class="row-val green" style="font-size:17px;font-weight:700">${fi(med65)}</div></div>
+        <div class="row"><div class="row-label">10th percentile</div><div class="row-val orange">${fi(p10)}</div></div>
+        <div class="row"><div class="row-label">90th percentile</div><div class="row-val purple">${fi(p90)}</div></div>
+        <div class="row"><div class="row-label">Expenses inflated 28yr @3%</div><div class="row-val">~$29,300/mo</div></div>
+      </div>`;
+
+    drawMCChart(yd, YEARS);
+    document.getElementById('mcStatus').innerHTML = `<span style="color:#34c759;font-weight:600">✓</span> Median at year ${YEARS}: <b>${fm(pct(finalBals, 0.5))}</b>`;
+    document.getElementById('mcResults').style.display = 'block';
+    if (btn) { btn.textContent = '↺ Re-run'; btn.disabled = false; }
+    updateSSResults();
+  }, 50);
+}
+
+function drawMCChart(yd, years) {
+  const c = document.getElementById('mcChart');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.offsetWidth || 340, H = 200;
+  c.width  = W * devicePixelRatio;
+  c.height = H * devicePixelRatio;
+  c.style.width  = W + 'px';
+  c.style.height = H + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const pct = (arr, p) => arr[Math.floor(arr.length * p)];
+  const sorted = yd.map(y => [...y].sort((a, b) => a - b));
+  const p10=[], p25=[], p50=[], p75=[], p90=[];
+  sorted.forEach(a => { p10.push(pct(a,.1)); p25.push(pct(a,.25)); p50.push(pct(a,.5)); p75.push(pct(a,.75)); p90.push(pct(a,.9)); });
+
+  const mx = Math.max(...p90);
+  const pad = {l:40, r:8, t:8, b:24};
+  const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+  const x = i => pad.l + (i / (years - 1)) * cw;
+  const y = v => pad.t + ch - (v / mx) * ch;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(f => {
+    const yy = pad.t + ch * (1 - f);
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
+    ctx.fillStyle = '#8e8e93'; ctx.font = '9px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('$' + (mx * f / 1e6).toFixed(1) + 'M', pad.l - 3, yy + 3);
+  });
+  ctx.fillStyle = '#8e8e93'; ctx.font = '9px -apple-system'; ctx.textAlign = 'center';
+  [0, 7, 14, 21, 27].forEach(i => ctx.fillText(2026 + i + 1, x(i), H - 6));
+
+  [{d:p10,c:'#ff3b30'},{d:p25,c:'#ff9500'},{d:p50,c:'#007aff',w:2.5},{d:p75,c:'#34c759'},{d:p90,c:'#af52de'}]
+    .forEach(({d, c, w=1.5}) => {
+      ctx.beginPath(); ctx.strokeStyle = c; ctx.lineWidth = w;
+      d.forEach((v, i) => i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)));
+      ctx.stroke();
+    });
+}
+
+// ── SOCIAL SECURITY ───────────────────────────────────────────────────────────
+function setSS(person, age) {
+  SS[person].age = age;
+  [65, 67, 70].forEach(a => {
+    const btn = document.getElementById(person + '-' + a);
+    if (btn) btn.className = 'ss-btn' + (a === age ? ' ss-active' : '');
+  });
+  updateSSResults();
+}
+
+function updateSSResults() {
+  const ef = SS.eric.future[SS.eric.age];
+  const mf = SS.mattie.future[SS.mattie.age];
+  const et = SS.eric.today[SS.eric.age];
+  const mt = SS.mattie.today[SS.mattie.age];
+  const ey = SS.eric.claimYear[SS.eric.age];
+  const my = SS.mattie.claimYear[SS.mattie.age];
+  const combined = ef + mf;
+  const f = n => '$' + n.toLocaleString();
+  const hasRun = document.getElementById('mcIncome')?.innerHTML?.length > 10;
+  const el = document.getElementById('ssResults');
+  if (!el) return;
+
+  const note = SS.eric.age === 70
+    ? '<div style="font-size:12px;color:#1a7f37;margin-top:8px">&#9733; Waiting until 70 maximizes Eric\'s benefit + survivor protection</div>'
+    : SS.eric.age === 65
+    ? '<div style="font-size:12px;color:#ff9500;margin-top:8px">&#9888; Claiming at 65 = $1,551/mo less than age 70 in today\'s dollars</div>'
+    : '';
+
+  el.innerHTML =
+    '<div style="border-top:1px solid #f2f2f7;padding-top:10px">' +
+    '<div style="font-size:12px;color:#8e8e93;margin-bottom:8px">Future dollars &middot; 2.5%/yr COLA to claim year</div>' +
+    `<div style="display:flex;justify-content:space-between;align-items:flex-end;font-size:14px;padding:6px 0;border-bottom:1px solid #f9f9f9">
+      <div><div style="color:#6e6e73">Eric at ${SS.eric.age} (${ey})</div><div style="font-size:11px;color:#8e8e93">Today: ${f(et)}/mo</div></div>
+      <span style="font-weight:600">${f(ef)}/mo</span></div>` +
+    `<div style="display:flex;justify-content:space-between;align-items:flex-end;font-size:14px;padding:6px 0;border-bottom:1px solid #f9f9f9">
+      <div><div style="color:#6e6e73">Mattie at ${SS.mattie.age} (${my})</div><div style="font-size:11px;color:#8e8e93">Today: ${f(mt)}/mo</div></div>
+      <span style="font-weight:600">${f(mf)}/mo</span></div>` +
+    `<div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0;font-weight:600;border-bottom:1px solid #f9f9f9">
+      <span>Combined SS (future $)</span><span style="color:#34c759">${f(combined)}/mo</span></div>` +
+    (hasRun
+      ? `<div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px solid #f9f9f9"><span style="color:#6e6e73">Portfolio withdrawal (median)</span><span id="ssP">&#8212;</span></div>
+         <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0;font-weight:700"><span>Total retirement income</span><span style="color:#34c759" id="ssT">&#8212;</span></div>
+         <div style="font-size:11px;color:#8e8e93;margin-top:4px">SS begins ${Math.min(ey,my)}&ndash;${Math.max(ey,my)}, after the 2054 portfolio milestone</div>`
+      : '<div style="font-size:12px;color:#8e8e93;margin-top:6px">Run Monte Carlo above to see combined total.</div>') +
+    note +
+    '<div style="font-size:11px;color:#8e8e93;margin-top:6px">Verify actual estimates at ssa.gov/myaccount</div>' +
+    '</div>';
+
+  if (hasRun) {
+    const pm = document.getElementById('mcPM');
+    if (pm) {
+      const v = parseFloat(pm.dataset.m);
+      const ssP = document.getElementById('ssP');
+      const ssT = document.getElementById('ssT');
+      if (ssP) ssP.textContent = '$' + Math.round(v).toLocaleString() + '/mo';
+      if (ssT) ssT.textContent = '$' + Math.round(v + combined).toLocaleString() + '/mo';
+    }
+  }
+}
+// ── TAB NAVIGATION ────────────────────────────────────────────────────────────
+function showTab(id, el) {
+  expandedCats.clear();
+  collapsedSections.clear();
+  closeAllDropdowns();
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'projection') buildProjection();
+}
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+function signIn() {
+  const btn = document.querySelector('#authScreen button');
+  if (btn) { btn.textContent = 'Signing in...'; btn.disabled = true; }
+  try {
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+      if (btn) { btn.textContent = 'Sign in with Google'; btn.disabled = false; }
+      alert('Google sign-in not ready. Please refresh the page and try again.');
+      return;
+    }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: async resp => {
+        if (resp.error) {
+          alert('Sign-in failed: ' + resp.error);
+          if (btn) { btn.textContent = 'Sign in with Google'; btn.disabled = false; }
+          return;
+        }
+        accessToken = resp.access_token;
+        localStorage.setItem('gv_token', accessToken);
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('loadingScreen').style.display = 'block';
+        await initApp();
+      }
+    });
+    tokenClient.requestAccessToken({prompt: 'consent'});
+  } catch (e) {
+    console.error('signIn error:', e);
+    alert('Sign-in error: ' + e.message);
+    if (btn) { btn.textContent = 'Sign in with Google'; btn.disabled = false; }
+  }
+}
+
+function signOut() {
+  if (accessToken && typeof google !== 'undefined') google.accounts.oauth2.revoke(accessToken);
+  accessToken = null;
+  localStorage.removeItem('gv_token');
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'block';
+}
+
+function forceSignOut() {
+  accessToken = null;
+  localStorage.removeItem('gv_token');
+  location.reload();
+}
+// ── SHEETS API ────────────────────────────────────────────────────────────────
+async function gapi(method, url, body) {
+  const r = await fetch(url, {
+    method,
+    headers: {'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r;
+}
+
+async function readSheet(sheetId, range) {
+  const r = await gapi('GET', `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`);
+  if (r.status === 401 || r.status === 403) {
+    accessToken = null;
+    localStorage.removeItem('gv_token');
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('authScreen').style.display = 'block';
+    throw new Error('Auth expired — please sign in again');
+  }
+  const j = await r.json();
+  return j.values || [];
+}
+
+async function writeSheet(sheetId, range, values) {
+  await gapi('PUT',
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    {range, majorDimension: 'ROWS', values}
+  );
+}
+
+async function clearAndWrite(sheetId, range, values) {
+  await gapi('POST', `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`);
+  if (values.length) await writeSheet(sheetId, range, values);
+}
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function initApp() {
+  try {
+    setLoading('Loading budget config...');
+    await loadBudgetConfig();
+    setLoading('Loading financial plan...');
+    await loadPlanConfig();
+    setLoading('Loading tracker data...');
+    await loadTrackerData();
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    const startIdx = detectCurrentMonthIdx();
+    windowStart = Math.max(0, startIdx - 2);
+    renderTracker(startIdx);
+    renderMonthly(startIdx);
+    renderSnapshot();
+    renderWindfall();
+    renderRetirement();
+    renderGoals();
+    await loadInsights();
+    renderInsights();
+  } catch (e) {
+    console.error('initApp error:', e);
+    setLoadingError(e.message || 'Unknown error — check browser console (F12)');
+    throw e;
+  }
+}
+
+function setLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg;
+  const errEl = document.getElementById('loadingError');
+  if (errEl) errEl.style.display = 'none';
+}
+
+function setLoadingError(msg) {
+  document.getElementById('loadingMsg').textContent = 'Something went wrong';
+  const errEl = document.getElementById('loadingError');
+  if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  const signOutBtn = document.getElementById('loadingSignOutBtn');
+  if (signOutBtn) signOutBtn.style.display = 'block';
+  const spinner = document.querySelector('.spinner');
+  if (spinner) spinner.style.display = 'none';
+}
+
+// ── LOAD BUDGET CONFIG ────────────────────────────────────────────────────────
+async function loadBudgetConfig() {
+  let rows = [];
+  try {
+    rows = await readSheet(BUDGET_SHEET_ID, 'Budget!A:T');
+  } catch (e) {
+    setLoadingError('Error reading Budget sheet: ' + e.message);
+    throw e;
+  }
+  if (rows.length < 2) {
+    setLoading('Budget sheet empty — setting up defaults...');
+    await setupBudgetSheet();
+    rows = await readSheet(BUDGET_SHEET_ID, 'Budget!A:T');
+    if (rows.length < 2) {
+      setLoadingError('Setup failed — check that tab names match exactly: Budget, CategoryState, Transactions, SinkingFunds, TrackerBudgets, ExtraMonths, PlaidTokens, MerchantMap');
+      throw new Error('Setup failed');
+    }
+  }
+  const headers = rows[0];
+  budgetPlan = rows.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i] || '');
+    obj.amounts = {};
+    MONTH_KEYS_BASE.forEach(mk => { obj.amounts[mk] = parseFloat(obj[mk]) || 0; });
+    obj.isFixed       = obj.Fixed      === 'TRUE';
+    obj.isSinkingFund = obj.SinkingFund === 'TRUE';
+    obj.isSavings     = obj.Savings    === 'TRUE';
+    return obj;
+  }).filter(r => r.Category);
+}
+
+// ── LOAD PLAN CONFIG ──────────────────────────────────────────────────────────
+async function loadPlanConfig() {
+  // Plan tab lives in the Budget Sheet (same spreadsheet as everything else)
+  const rows = await readSheet(BUDGET_SHEET_ID, 'Plan!A:B');
+  console.log('[Plan] raw rows count:', rows.length);
+  if (rows.length < 2) {
+    await setupPlanSheet();
+    return loadPlanConfig();
+  }
+  planConfig = {};
+  rows.slice(1).forEach(r => {
+    if (!r[0]) return;
+    const raw = r[1] || '';
+    const num = parseFloat(String(raw).replace(/[$,]/g, ''));
+    if (!isNaN(num) && String(raw).trim() !== '') {
+      const plainKeys = ['eric_age', 'mattie_age'];
+      planConfig[r[0]] = plainKeys.includes(r[0])
+        ? String(Math.round(num))
+        : '$' + num.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:2});
+    } else {
+      planConfig[r[0]] = raw;
+    }
+  });
+  console.log('[Plan] invested_annual =', planConfig['invested_annual']);
+  console.log('[Plan] contrib_401k =', planConfig['contrib_401k']);
+}
+
+// ── LOAD TRACKER DATA ─────────────────────────────────────────────────────────
+async function loadTrackerData() {
+  const [stateRows, txnRows, sfRows, budgetRows, monthRows] = await Promise.all([
+    readSheet(BUDGET_SHEET_ID, 'CategoryState!A:F'),
+    readSheet(BUDGET_SHEET_ID, 'Transactions!A:H'),
+    readSheet(BUDGET_SHEET_ID, 'SinkingFunds!A:D'),
+    readSheet(BUDGET_SHEET_ID, 'TrackerBudgets!A:C'),
+    readSheet(BUDGET_SHEET_ID, 'ExtraMonths!A:C'),
+  ]);
+
+  trackerData = {state:{}, transactions:{}, sinkingFunds:{}, splitGroups:{}, confirmedPlaidIds: new Set()};
+  trackerBudgets = {};
+
+  if (stateRows.length > 1) stateRows.slice(1).forEach(r => {
+    const [month, cat, isSpent, isClosed, col4, col5] = r;
+    if (!month || !cat) return;
+    if (!trackerData.state[month]) trackerData.state[month] = {};
+    const surplusCovered = r.length >= 6 ? col5 : col4;
+    trackerData.state[month][cat] = {
+      isSpent:        isSpent === 'TRUE',
+      isClosed:       isClosed === 'TRUE',
+      surplusCovered: parseFloat(surplusCovered) || 0
+    };
+  });
+
+  if (txnRows.length > 1) txnRows.slice(1).forEach(r => {
+    const [id, month, cat, desc, amt, ts, sgId, autoGen] = r;
+    if (!month || !cat) return;
+    if (!trackerData.transactions[month]) trackerData.transactions[month] = {};
+    if (!trackerData.transactions[month][cat]) trackerData.transactions[month][cat] = [];
+    const txnObj = {id, desc, amt: parseFloat(amt) || 0, ts, splitGroupId: sgId || null, autoGenerated: autoGen === 'TRUE'};
+    trackerData.transactions[month][cat].push(txnObj);
+    if (id && id.length > 8) trackerData.confirmedPlaidIds.add(id);
+  });
+
+  if (sfRows.length > 1) sfRows.slice(1).forEach(r => {
+    if (!r[0] || r[0].startsWith('_sf_')) return;
+    trackerData.sinkingFunds[r[0]] = {
+      isActive:       r[1] === 'TRUE',
+      activeFrom:     parseInt(r[2]) || 0,
+      runningBalance: parseFloat(r[3]) || 0
+    };
+  });
+
+  if (budgetRows.length > 1) budgetRows.slice(1).forEach(r => {
+    const [month, cat, amt] = r;
+    if (!month || !cat) return;
+    if (!trackerBudgets[month]) trackerBudgets[month] = {};
+    trackerBudgets[month][cat] = parseFloat(amt) || 0;
+  });
+
+  if (monthRows.length > 1) monthRows.slice(1).forEach(r => {
+    const [key, label, yearMonth] = r;
+    if (!key) return;
+    const [year, month] = yearMonth ? yearMonth.split('-').map(Number) : [2027, 8];
+    if (!months.find(m => m.key === key)) months.push({key, label, year, month});
+  });
+
+  // Load merchant map for Plaid categorization learning
+  const mmRows = await readSheet(BUDGET_SHEET_ID, 'MerchantMap!A:B');
+  merchantMap = {};
+  if (mmRows.length > 1) mmRows.slice(1).forEach(r => {
+    if (r[0] && r[1]) merchantMap[r[0].toLowerCase()] = r[1];
+  });
+
+  // Load Balance History tab
+  try {
+    const bhRows = await readSheet(BUDGET_SHEET_ID, 'BalanceHistory!A:D');
+    balanceHistory = [];
+    if (bhRows.length > 1) bhRows.slice(1).forEach(r => {
+      if (!r[0] || !r[1] || !r[3]) return;
+      const parsed = new Date(r[0] + ' 1');
+      if (!isNaN(parsed)) balanceHistory.push({
+        date:       r[0],
+        account:    r[1],
+        type:       (r[2] || '').toLowerCase(),
+        balance:    parseFloat(String(r[3]).replace(/[$,]/g, '')) || 0,
+        parsedDate: parsed,
+      });
+    });
+    balanceHistory.sort((a, b) => a.parsedDate - b.parsedDate);
+    console.log('[BalanceHistory] loaded', balanceHistory.length, 'records');
+  } catch(e) { console.log('BalanceHistory tab not found:', e.message); }
+
+  // Load Income tab
+  try {
+    const incRows = await readSheet(BUDGET_SHEET_ID, 'Income!A:C');
+    incomeConfig = [];
+    if (incRows.length > 1) incRows.slice(1).forEach(r => {
+      if (r[0] && r[1]) incomeConfig.push({
+        person: r[0],
+        biweekly: parseFloat(r[1]) || 0,
+        effectiveDate: r[2] || '2026-06-01'
+      });
+    });
+  } catch(e) { console.log('Income tab not found:', e.message); }
+
+  // Load Windfall allocation tab into planConfig
+  try {
+    const wfRows = await readSheet(BUDGET_SHEET_ID, 'Windfall!A:D');
+    if (wfRows.length > 1) wfRows.slice(1).forEach(r => {
+      if (r[0] && r[2]) planConfig[r[0]] = '$' + parseFloat(r[2]).toLocaleString();
+    });
+  } catch(e) { console.log('Windfall tab not found:', e.message); }
+
+  // Load WindfallLog tab
+  try {
+    const wlRows = await readSheet(BUDGET_SHEET_ID, 'WindfallLog!A:E');
+    windfallLog = [];
+    if (wlRows.length > 1) wlRows.slice(1).forEach(r => {
+      if (r[0] && r[2]) windfallLog.push({
+        year:   parseInt(r[0]) || 2026,
+        date:   r[1] || '',
+        source: r[2] || '',
+        amount: parseFloat(r[3]) || 0,
+        notes:  r[4] || '',
+      });
+    });
+    // Build year list from log
+    const yearSet = new Set(windfallLog.map(w => w.year));
+    yearSet.add(2026); // always include 2026
+    windfallYears = [...yearSet].sort();
+  } catch(e) { console.log('WindfallLog tab not found:', e.message); windfallYears = [2026]; }
+}
+// ── SAVE ──────────────────────────────────────────────────────────────────────
+function scheduleSave() {
+  setSyncStatus('syncing');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(saveAll, 1500);
+}
+
+function setSyncStatus(s) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncStatus');
+  if (!dot || !txt) return;
+  dot.className = 'sync-dot' + (s === 'syncing' ? ' syncing' : s === 'error' ? ' error' : '');
+  txt.textContent = s === 'syncing' ? 'Saving...' : s === 'error' ? 'Error' : 'Saved';
+}
+
+async function saveAll() {
+  try {
+    // Category state
+    const stateRows = [['Month','Category','IsSpent','IsClosed','SurplusCovered']];
+    Object.entries(trackerData.state).forEach(([month, cats]) =>
+      Object.entries(cats).forEach(([cat, s]) =>
+        stateRows.push([month, cat, s.isSpent ? 'TRUE' : 'FALSE', s.isClosed ? 'TRUE' : 'FALSE', s.surplusCovered || 0])
+      )
+    );
+
+    // Transactions
+    const txnRows = [['ID','Month','Category','Description','Amount','Timestamp','SplitGroupID','AutoGenerated']];
+    Object.entries(trackerData.transactions).forEach(([month, cats]) =>
+      Object.entries(cats).forEach(([cat, txns]) =>
+        txns.forEach(t => txnRows.push([t.id, month, cat, t.desc, t.amt, t.ts, t.splitGroupId || '', t.autoGenerated ? 'TRUE' : 'FALSE']))
+      )
+    );
+
+    // Sinking funds
+    const sfRows = [['Category','IsActive','ActiveFrom','RunningBalance']];
+    Object.entries(trackerData.sinkingFunds).forEach(([cat, rec]) => {
+      if (typeof rec === 'object') sfRows.push([cat, rec.isActive ? 'TRUE' : 'FALSE', rec.activeFrom || 0, rec.runningBalance || 0]);
+    });
+
+    // Tracker budget overrides
+    const budgetRows = [['Month','Category','Amount']];
+    Object.entries(trackerBudgets).forEach(([month, cats]) =>
+      Object.entries(cats).forEach(([cat, amt]) => budgetRows.push([month, cat, amt]))
+    );
+
+    // Extra months beyond base
+    const extraMonthRows = [['Key','Label','YearMonth']];
+    months.slice(BASE_MONTHS.length).forEach(m => extraMonthRows.push([m.key, m.label, `${m.year}-${m.month}`]));
+
+    // Merchant map (Plaid learning)
+    const mmRows = [['Merchant','Category']];
+    Object.entries(merchantMap).forEach(([m, c]) => mmRows.push([m, c]));
+
+    // Windfall log
+    const wlRows = [['Year','Date','Source','Amount','Notes']];
+    windfallLog.forEach(w => wlRows.push([w.year, w.date, w.source, w.amount, w.notes]));
+
+    await Promise.all([
+      clearAndWrite(BUDGET_SHEET_ID, 'CategoryState!A1',   stateRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'Transactions!A1',    txnRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'SinkingFunds!A1',    sfRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'TrackerBudgets!A1',  budgetRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'ExtraMonths!A1',     extraMonthRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'MerchantMap!A1',     mmRows),
+      clearAndWrite(BUDGET_SHEET_ID, 'WindfallLog!A1',     wlRows),
+    ]);
+
+    setSyncStatus('ok');
+  } catch (e) {
+    setSyncStatus('error');
+    console.error('saveAll error:', e);
+  }
+}
+// ── SHEET SETUP ───────────────────────────────────────────────────────────────
+async function setupBudgetSheet() {
+  try {
+    setLoading('Setting up Budget sheet...');
+    const headers = ['Category','Section','Color','Fixed','SinkingFund','Savings', ...MONTH_KEYS_BASE];
+    await clearAndWrite(BUDGET_SHEET_ID, 'Budget!A1',          [headers, ...DEFAULT_BUDGET_DATA]);
+    await clearAndWrite(BUDGET_SHEET_ID, 'CategoryState!A1',   [['Month','Category','IsSpent','IsClosed','SurplusCovered']]);
+    await clearAndWrite(BUDGET_SHEET_ID, 'Transactions!A1',    [['ID','Month','Category','Description','Amount','Timestamp','SplitGroupID','AutoGenerated']]);
+    await clearAndWrite(BUDGET_SHEET_ID, 'SinkingFunds!A1',    [['Category','IsActive','ActiveFrom','RunningBalance']]);
+    await clearAndWrite(BUDGET_SHEET_ID, 'TrackerBudgets!A1',  [['Month','Category','Amount']]);
+    await clearAndWrite(BUDGET_SHEET_ID, 'ExtraMonths!A1',     [['Key','Label','YearMonth']]);
+    await setupIncomeTab();
+    await setupWindfallTab();
+    await setupWindfallLogTab();
+  } catch (e) {
+    setLoadingError('Sheet setup error: ' + e.message + ' — check tab names exist in your Google Sheet');
+    throw e;
+  }
+}
+
+async function setupIncomeTab() {
+  await clearAndWrite(BUDGET_SHEET_ID, 'Income!A1', [
+    ['Person', 'Biweekly', 'EffectiveDate', 'Notes'],
+    ['Eric',   5678.35,    '2026-06-01',    'Current take-home biweekly'],
+    ['Mattie', 2613.30,    '2026-06-01',    '1st June paycheck (old rate)'],
+    ['Mattie', 2574.19,    '2026-06-16',    '2nd June paycheck onward (retirement contribution change)'],
+  ]);
+}
+
+async function setupWindfallTab() {
+  await clearAndWrite(BUDGET_SHEET_ID, 'Windfall!A1', [
+    ['Key',                  'Label',                        'Amount', 'Priority', 'Notes'],
+    ['windfall_christmas',   'Christmas fund',               2000,     1,          'Gifts & festivities'],
+    ['windfall_roth_eric',   'Eric Roth IRA (backdoor)',     7500,     2,          'Annual contribution'],
+    ['windfall_roth_mattie', 'Mattie Roth IRA (backdoor)',   7500,     3,          'Annual contribution'],
+    ['windfall_vacation',    'Annual vacation',              5000,     4,          'Family trip'],
+    ['windfall_home',        'Home projects top-up',         1000,     5,          'Annual contribution'],
+    ['windfall_car_mattie',  "Mattie's car fund boost",      1463,     6,          'Toward SUV Dec 2028'],
+    ['windfall_emergency',   'Emergency fund boost',         1464,     7,          'Annual contribution'],
+  ]);
+}
+
+async function setupWindfallLogTab() {
+  await clearAndWrite(BUDGET_SHEET_ID, 'WindfallLog!A1', [
+    ['Year', 'Date',       'Source',              'Amount',  'Notes'],
+    [2026,   '2026-10-31', 'Mattie extra check',  2574.19,   '3rd paycheck Oct'],
+    [2026,   '2026-12-28', 'Eric bonus',          9000,      'Annual bonus'],
+    [2026,   '2026-12-31', 'Eric DSA',            7500,      'Deferred stock award'],
+    [2026,   '2027-01-07', 'Well-being subsidy',  1200,      'Annual subsidy — applied to 2026 plan'],
+    [2027,   '2027-04-??', 'Mattie extra check',  2574.19,   'Est. 3rd paycheck Apr — update date when known'],
+  ]);
+}
+
+async function setupPlanSheet() {
+  setLoading('Setting up Plan tab...');
+  await clearAndWrite(BUDGET_SHEET_ID, 'Plan!A1', [['Key','Value'], ...DEFAULT_PLAN_DATA]);
+}
+// ── DEFAULT BUDGET DATA ───────────────────────────────────────────────────────
+// Columns: Category, Section, Color, Fixed, SinkingFund, Savings, Jun26...Jul27 (14 months)
+const DEFAULT_BUDGET_DATA = [
+//  Category                  Section                    Color       Fixed   SF      Sav    Jun26  Jul26  Aug26  Sep26  Oct26  Nov26  Dec26  Jan27  Feb27  Mar27  Apr27  May27  Jun27  Jul27
+  ['Mortgage',               'Housing & Transport',     '#007aff',  'TRUE', 'FALSE','FALSE', 0,    4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400,  4400],
+  ['Car payment',            'Housing & Transport',     '#007aff',  'TRUE', 'FALSE','FALSE', 0,     648,   648,   648,   648,   648,   648,   648,   648,   648,   648,   648,   648,   648],
+  ['Car insurance',          'Housing & Transport',     '#007aff',  'TRUE', 'FALSE','FALSE', 0,     250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250],
+  ['Internet',               'Housing & Transport',     '#007aff',  'TRUE', 'FALSE','FALSE', 0,      69,    69,    69,    69,    69,    69,    69,    69,    69,    69,    69,    69,    69],
+  ['Electricity',            'Utilities',               '#ff9500',  'FALSE','FALSE','FALSE', 0,     700,   550,   450,   380,   320,   300,   300,   380,   420,   480,   550,   700,   700],
+  ['Water',                  'Utilities',               '#ff9500',  'TRUE', 'FALSE','FALSE', 0,     175,   175,   175,   175,   175,   175,   175,   175,   175,   175,   175,   175,   175],
+  ['Natural gas',            'Utilities',               '#ff9500',  'FALSE','FALSE','FALSE', 0,      75,   100,   130,   160,   190,   200,   200,   150,   120,   100,    75,    75,    75],
+  ['Groceries',              'Food',                    '#34c759',  'FALSE','FALSE','FALSE', 0,    1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000],
+  ['Dining out',             'Food',                    '#34c759',  'FALSE','FALSE','FALSE', 0,     900,   900,   900,   900,   900,   900,   900,   900,   900,   900,   900,   900,   900],
+  ['Daycare',                'Kids',                    '#ff3b30',  'FALSE','FALSE','FALSE', 0,   687.5,     0,     0,     0,     0, 687.5, 687.5, 687.5, 687.5, 687.5,     0,     0,     0],
+  ['Kids clothes & items',   'Kids',                    '#ff3b30',  'FALSE','TRUE', 'FALSE', 0,     300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300],
+  ['Sports dues',            'Kids',                    '#ff3b30',  'FALSE','TRUE', 'FALSE', 0,       0,   375,   375,    83,    83,    83,     0,     0,     0,     0,     0,     0,     0],
+  ['Housekeeper',            'Home',                    '#8e8e93',  'TRUE', 'FALSE','FALSE', 0,     320,   320,   320,   320,   320,   320,   320,   320,   320,   320,   320,   320,   320],
+  ['Lawn care',              'Home',                    '#8e8e93',  'TRUE', 'FALSE','FALSE', 0,     200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200],
+  ['Home expenses',          'Home',                    '#8e8e93',  'FALSE','TRUE', 'FALSE', 0,     300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300],
+  ['HOA',                    'Home',                    '#8e8e93',  'TRUE', 'FALSE','FALSE', 0,  131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67,131.67],
+  ['Grooming',               'Pet',                     '#ff6b35',  'TRUE', 'FALSE','FALSE', 0,      80,    80,    80,    80,    80,    80,    80,    80,    80,    80,    80,    80,    80],
+  ['Pet food & misc',        'Pet',                     '#ff6b35',  'FALSE','FALSE','FALSE', 0,      20,    20,    20,    20,    20,    20,    20,    20,    20,    20,    20,    20,    20],
+  ['Gym',                    'Lifestyle',               '#af52de',  'TRUE', 'FALSE','FALSE', 0,     388,   388,   388,   388,   388,   388,   388,   388,   388,   388,   388,   510,   510],
+  ['Streaming',              'Lifestyle',               '#af52de',  'TRUE', 'FALSE','FALSE', 0,  120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96,120.96],
+  ['Gas/fuel',               'Lifestyle',               '#af52de',  'FALSE','FALSE','FALSE', 0,     250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250],
+  ['Toll roads',             'Lifestyle',               '#af52de',  'FALSE','FALSE','FALSE', 0,      75,    75,    75,    75,    75,    75,    75,    75,    75,    75,    75,    75,    75],
+  ['Haircuts',               'Lifestyle',               '#af52de',  'FALSE','TRUE', 'FALSE', 0,      60,    60,   300,    60,   300,    60,    60,   300,    60,   300,    60,   300,   300],
+  ['Date night',             'Lifestyle',               '#af52de',  'FALSE','FALSE','FALSE', 0,     250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250,   250],
+  ['Personal (Eric)',        'Personal & Giving',       '#5856d6',  'FALSE','FALSE','FALSE', 0,     400,   400,   400,   400,   400,   400,   400,   400,   400,   400,   400,   400,   400],
+  ['Personal (Mattie)',      'Personal & Giving',       '#5856d6',  'FALSE','FALSE','FALSE', 0,     420,   420,   420,   420,   420,   420,   420,   420,   420,   420,   420,   420,   420],
+  ['Life insurance',         'Personal & Giving',       '#5856d6',  'TRUE', 'FALSE','FALSE', 0,   78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02, 78.02],
+  ['Tithe',                  'Personal & Giving',       '#5856d6',  'TRUE', 'FALSE','FALSE', 0,     800,   800,   800,   800,   800,   900,   900,   900,   900,   900,   900,   900,   900],
+  ['Kinsley 529',            '529s',                    '#af52de',  'TRUE', 'FALSE','TRUE',  0,     325,   325,   325,   325,   325,   325,   325,   325,   325,   325,   325,   325,   325],
+  ['Kyle 529',               '529s',                    '#af52de',  'TRUE', 'FALSE','TRUE',  0,     200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200,   200],
+  ['Collins 529',            '529s',                    '#af52de',  'TRUE', 'FALSE','TRUE',  0,     225,   225,   225,   225,   225,   225,   225,   225,   225,   225,   225,   225,   225],
+  ['Kinsley car',            'Kids Cars & Weddings',    '#ff3b30',  'TRUE', 'FALSE','TRUE',  0,     152,   152,   152,   152,   152,   152,   152,   152,   152,   152,   152,   152,   152],
+  ['Kyle car',               'Kids Cars & Weddings',    '#ff3b30',  'TRUE', 'FALSE','TRUE',  0,     162,   162,   162,   162,   162,   162,   162,   162,   162,   162,   162,   162,   162],
+  ['Collins car',            'Kids Cars & Weddings',    '#ff3b30',  'TRUE', 'FALSE','TRUE',  0,     106,   106,   106,   106,   106,   106,   106,   106,   106,   106,   106,   106,   106],
+  ['Kinsley wedding',        'Kids Cars & Weddings',    '#ff2d55',  'TRUE', 'FALSE','TRUE',  0,     167,   167,   167,   167,   167,   167,   167,   167,   167,   167,   167,   167,   167],
+  ['Collins wedding',        'Kids Cars & Weddings',    '#ff2d55',  'TRUE', 'FALSE','TRUE',  0,      96,    96,    96,    96,    96,    96,    96,    96,    96,    96,    96,    96,    96],
+  ['Mattie procedures',      'Savings Goals',           '#ff6b35',  'TRUE', 'FALSE','TRUE',  0,    1250,  1250,  1250,  1250,  1250,  1250,     0,     0,     0,     0,     0,     0,     0],
+  ['Mattie car fund',        'Savings Goals',           '#ff9500',  'TRUE', 'FALSE','TRUE',  0,     433,   433,   433,   433,   433,   433,  1683,  1683,  1683,  1683,  1683,  1683,  1683],
+  ['Home projects fund',     'Savings Goals',           '#8e8e93',  'FALSE','TRUE', 'TRUE',  0,     300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300,   300],
+  ['Christmas fund',         'Savings Goals',           '#ff2d55',  'FALSE','FALSE','TRUE',  0,       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0],
+  ['Emergency fund',         'Savings Goals',           '#34c759',  'FALSE','FALSE','TRUE',  0,       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0],
+];
+
+// ── DEFAULT PLAN DATA ─────────────────────────────────────────────────────────
+const DEFAULT_PLAN_DATA = [
+  // Income (now also managed in Income tab — Plan tab is reference only)
+  ['income_monthly',       '$17,880.50'],  // Eric + Mattie new rate from Jul26
+  ['eric_biweekly',        '$5,678.35'],
+  ['mattie_biweekly',      '$2,574.19'],   // updated Jun 2026
+  ['eric_age',             '37'],
+  ['mattie_age',           '36'],
+  // Windfall (also managed in Windfall tab)
+  ['windfall_annual',      '$25,927'],
+  // Retirement balances
+  ['balance_401k',         '$370,000'],
+  ['balance_roth',         '$50,000'],
+  ['balance_aftertax',     '$26,000'],
+  ['balance_hsa',          '$3,000'],
+  ['balance_retirement_total', '$449,000'],
+  // Retirement contributions — update these when contribution amounts change
+  ['contrib_401k',         '$30,000'],     // combined both 401ks
+  ['contrib_match',        '$16,302'],     // employer match
+  ['contrib_roth_ira',     '$15,000'],     // backdoor Roth (via windfall)
+  ['hsa_annual',           '$6,400'],
+  ['invested_annual',      '$70,874'],     // 401k + match + HSA + Roth (total annual invested)
+  // Emergency fund
+  ['emergency_balance',    '$17,500'],
+  ['emergency_target',     '$78,000'],
+  // 529 balances
+  ['529_kinsley',          '$15,500'],
+  ['529_kyle',             '$16,000'],
+  ['529_collins',          '$3,000'],
+  // Windfall allocations (also in Windfall tab — keep in sync)
+  ['windfall_roth_eric',   '$7,500'],
+  ['windfall_roth_mattie', '$7,500'],
+  ['windfall_vacation',    '$5,000'],
+  ['windfall_christmas',   '$2,000'],
+  ['windfall_home',        '$1,000'],
+  ['windfall_car_mattie',  '$1,463'],
+  ['windfall_emergency',   '$1,464'],
+  ['car_mattie_saved',     '$4,300'],
+];
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  const saved = localStorage.getItem('gv_token');
+  if (saved) {
+    accessToken = saved;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('loadingScreen').style.display = 'block';
+    try {
+      await initApp();
+    } catch (e) {
+      // Token likely expired — clear it and show sign-in
+      accessToken = null;
+      localStorage.removeItem('gv_token');
+      document.getElementById('loadingScreen').style.display = 'none';
+      document.getElementById('authScreen').style.display = 'block';
+    }
+  }
+})();
+
+</script>
+</body>
+</html>
