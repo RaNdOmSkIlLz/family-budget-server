@@ -294,8 +294,19 @@ async function processMessage(gmail, msgId) {
 
   const headers = msg.data.payload?.headers || [];
   const from    = headers.find(h => h.name === 'From')?.value || '';
-  const subject = headers.find(h => h.name === 'Subject')?.value || '';
+  const rawSubject = headers.find(h => h.name === 'Subject')?.value || '';
   const date    = headers.find(h => h.name === 'Date')?.value || '';
+
+  // Decode MIME encoded-word subject (=?UTF-8?B?...?= or =?UTF-8?Q?...?=)
+  const subject = rawSubject.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, encoding, encoded) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        return Buffer.from(encoded, 'base64').toString('utf8');
+      } else {
+        return encoded.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (__, h) => String.fromCharCode(parseInt(h, 16)));
+      }
+    } catch(e) { return rawSubject; }
+  });
 
   console.log(`Processing: "${subject}" from "${from}"`);
 
@@ -492,7 +503,15 @@ module.exports = async (req, res) => {
         });
         const headers = meta.data.payload?.headers || [];
         const from = headers.find(h => h.name === 'From')?.value || '';
-        const subject = headers.find(h => h.name === 'Subject')?.value || '';
+        const rawSubj = headers.find(h => h.name === 'Subject')?.value || '';
+        // Decode MIME encoded-word
+        const subject = rawSubj.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, enc, encoded) => {
+          try {
+            return enc.toUpperCase() === 'B'
+              ? Buffer.from(encoded, 'base64').toString('utf8')
+              : encoded.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (__, h) => String.fromCharCode(parseInt(h, 16)));
+          } catch(e) { return rawSubj; }
+        });
         console.log(`Message ${msgId}: from="${from}" subject="${subject}"`);
         // Queue for processing if it looks Amazon-related at metadata level
         // OR if it's unread (body check in processMessage will filter non-Amazon)
