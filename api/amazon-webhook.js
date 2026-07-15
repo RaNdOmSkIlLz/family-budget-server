@@ -17,15 +17,22 @@ function detectEmailType(from, subject, bodyText) {
   const s = (subject || '').toLowerCase();
   const b = (bodyText || '').toLowerCase().substring(0, 5000);
 
-  // Direct from Amazon
+  // Direct from Amazon — check shipment first since it's more specific
+  if (f.includes('shipment-tracking@amazon.com') || f.includes('ship-confirm@amazon.com')) return 'shipment';
   if (f.includes('auto-confirm@amazon.com')) return 'order';
   if (f.includes('return@amazon.com') || f.includes('refund@amazon.com')) return 'return';
 
-  // Subject patterns (covers forwarded emails where subject is preserved)
-  if (s.includes('your amazon.com order') || s.includes('amazon.com order #')) return 'order';
-  if (s.includes('return request confirmed') || s.includes('refund') && s.includes('amazon')) return 'return';
+  // Subject patterns
+  if (s.includes('shipped:') || s.includes('your package was shipped') || s.includes('out for delivery') || s.includes('delivered')) return 'shipment';
+  if (s.includes('your amazon.com order') || s.includes('amazon.com order #') || s.includes('ordered:')) return 'order';
+  if (s.includes('return request confirmed') || (s.includes('refund') && s.includes('amazon'))) return 'return';
 
-  // Body content — check for Amazon order confirmation markers
+  // Body content
+  const bodyHasShipment =
+    b.includes('your package was shipped') ||
+    b.includes('shipment-tracking@amazon.com') ||
+    (b.includes('amazon') && b.includes('shipped') && b.includes('arriving'));
+
   const bodyHasOrderConfirm =
     b.includes('auto-confirm@amazon.com') ||
     b.includes('order confirmation') ||
@@ -39,6 +46,7 @@ function detectEmailType(from, subject, bodyText) {
     (b.includes('amazon') && b.includes('refund'));
 
   if (bodyHasReturn) return 'return';
+  if (bodyHasShipment) return 'shipment';
   if (bodyHasOrderConfirm) return 'order';
 
   return null;
@@ -64,7 +72,204 @@ function extractOrderTotal(text) {
   return null;
 }
 
-// ── TAX EXTRACTION ────────────────────────────────────────────────────────────
+// ── SHIPMENT ITEM EXTRACTION ──────────────────────────────────────────────────
+// Parses Amazon shipment emails which contain item names, prices, and image URLs
+function extractShipmentItems(html, plainText) {
+  const items = [];
+
+  // Strategy 1: Parse HTML for item blocks
+  // Amazon shipment emails have a pattern: image src near item name near price
+  // Look for <a> tags with item names near <img> tags
+  
+  // Extract all image URLs (product thumbnails are typically from media-amazon.com)
+  const imgPattern = /src=["'](https?:\/\/[^"']*media-amazon\.com[^"']*\.(jpg|png|gif)[^"']*?)["']/gi;
+  const imgUrls = [];
+  let imgMatch;
+  while ((imgMatch = imgPattern.exec(html)) !== null) {
+    const url = imgMatch[1];
+    // Filter out logos, banners, icons — product images have specific patterns
+    if (!url.includes('sprite') && !url.includes('logo') && !url.includes('pixel') &&
+        !url.includes('chevron') && !url.includes('button') && !url.includes('star')) {
+      imgUrls.push(url);
+    }
+  }
+
+  // Extract item names from anchor text near product links
+  // Amazon pattern: <a href="...amazon.com/dp/...">Item Name</a>
+  const itemLinkPattern = /<a[^>]+href=["'][^"']*(?:\/dp\/|\/gp\/product\/)[^"']*["'][^>]*>([^<]{5,200})<\/a>/gi;
+  const itemLinks = [];
+  let linkMatch;
+  while ((linkMatch = itemLinkPattern.exec(html)) !== null) {
+    const name = linkMatch[1].trim()
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#[0-9]+;/g, '')
+      .replace(/\s+/g, ' ');
+    if (name.length > 4 && !name.match(/^(view|see|track|buy|your|amazon|order)/i)) {
+      itemLinks.push(name);
+    }
+  }
+
+  // Extract prices near "Quantity" text — Amazon shipment format:
+  // "Glad for Kids...\nQuantity: 1\n$9.47"
+  const qtyPricePattern = /quantity[:\s]*\d+[^$]*?\$([0-9]+\.[0-9]{2})/gi;
+  const prices = [];
+  let priceMatch;
+  while ((priceMatch = qtyPricePattern.exec(plainText || html)) !== null) {
+    prices.push(parseFloat(priceMatch[1]));
+  }
+
+  // Also try plain text line-by-line for item+price pairs
+  if (plainText) {
+    const lines = plainText.split(/[\r\n]+/).map(l => l.trim()).filter(l => l);
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      // Look for price pattern after a quantity line
+      if (/^quantity/i.test(line)) {
+        // Next non-empty line might be the price
+        const nextLine = lines[li + 1] || '';
+        const priceM = nextLine.match(/^\$([0-9]+\.[0-9]{2})$/);
+        if (priceM && !prices.includes(parseFloat(priceM[1]))) {
+          prices.push(parseFloat(priceM[1]));
+        }
+      }
+    }
+  }
+
+  // Pair names with prices and images
+  const uniqueNames = [...new Set(itemLinks)];
+  uniqueNames.forEach((name, idx) => {
+    items.push({
+      name: name.substring(0, 150),
+      listPrice: prices[idx] || 0,
+      taxShare: 0,
+      totalPrice: prices[idx] || 0,
+      imageUrl: imgUrls[idx] || '',
+    });
+  });
+
+  // Fallback: if HTML parsing got nothing, try plain text
+  if (!items.length && plainText) {
+    const lines = plainText.split(/[\r\n]+/).map(l => l.trim()).filter(l => l);
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      if (/^quantity/i.test(line)) {
+        // Item name is likely a few lines before quantity
+        const candidateName = lines[li - 1] || '';
+        const priceLine = lines[li + 1] || '';
+        const priceM = priceLine.match(/^\$([0-9]+\.[0-9]{2})$/);
+        if (candidateName.length > 4 && priceM) {
+          items.push({
+            name: candidateName.substring(0, 150),
+            listPrice: parseFloat(priceM[1]),
+            taxShare: 0,
+            totalPrice: parseFloat(priceM[1]),
+            imageUrl: imgUrls[items.length] || '',
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`Shipment items parsed: ${items.length}`, items.map(i => `${i.name} $${i.listPrice}`));
+  return items;
+}
+
+// ── UPDATE EXISTING ORDER IN SHEET ────────────────────────────────────────────
+async function handleShipment(orderNumber, shipmentItems, orderDate) {
+  console.log(`handleShipment: order=${orderNumber}, items=${shipmentItems.length}`);
+
+  try {
+    const rows = await readRange('AmazonOrders!A:L');
+    if (!rows.length) return;
+
+    const header = rows[0];
+    const data = rows.slice(1);
+
+    // Find existing rows for this order
+    const existingRowIdxs = data
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => r[0] === orderNumber && r[2] === 'order');
+
+    console.log(`Found ${existingRowIdxs.length} existing rows for order ${orderNumber}`);
+
+    if (!shipmentItems.length) {
+      // No items parsed — just update status to 'shipped'
+      const updated = data.map(r => {
+        if (r[0] !== orderNumber || r[2] !== 'order') return r;
+        const nr = [...r];
+        nr[9] = 'shipped';
+        return nr;
+      });
+      await clearAndWrite('AmazonOrders!A1', [header, ...updated]);
+      return;
+    }
+
+    if (existingRowIdxs.length === 1 && existingRowIdxs[0].r[4] && 
+        (existingRowIdxs[0].r[4].includes('[Item') || !existingRowIdxs[0].r[4].includes('$'))) {
+      // Single generic placeholder row — replace with detailed items
+      const existingRow = existingRowIdxs[0].r;
+      const existingCat = existingRow[8] || ''; // preserve category if already set
+
+      // Remove the placeholder row
+      const filtered = data.filter((_, i) => i !== existingRowIdxs[0].i);
+
+      // Add one row per shipment item
+      const newRows = shipmentItems.map((item, idx) => [
+        orderNumber,
+        orderDate,
+        'order',
+        existingRow[3] || '',  // preserve PlaidTxnId
+        item.name,
+        item.listPrice,
+        item.taxShare || 0,
+        item.totalPrice,
+        idx === 0 ? existingCat : '', // preserve category on first item only
+        'shipped',
+        existingRow[10] || '',  // preserve mismatch
+        item.imageUrl || '',    // new ImageUrl column
+      ]);
+
+      await clearAndWrite('AmazonOrders!A1', [header, ...filtered, ...newRows]);
+      console.log(`Replaced placeholder with ${newRows.length} detailed items for ${orderNumber}`);
+
+    } else if (existingRowIdxs.length > 0) {
+      // Already have detail rows — update names, prices, images, status
+      const updated = data.map((r, ri) => {
+        if (r[0] !== orderNumber || r[2] !== 'order') return r;
+        const itemIdx = existingRowIdxs.findIndex(e => e.i === ri);
+        if (itemIdx < 0 || !shipmentItems[itemIdx]) {
+          const nr = [...r]; nr[9] = 'shipped'; return nr;
+        }
+        const si = shipmentItems[itemIdx];
+        const nr = [...r];
+        // Only update name if it's generic or shorter than shipped name
+        if (!r[4] || r[4].includes('[Item') || r[4].length < si.name.length) nr[4] = si.name;
+        if (si.listPrice > 0) { nr[5] = si.listPrice; nr[7] = si.totalPrice; }
+        nr[9] = 'shipped';
+        nr[11] = si.imageUrl || r[11] || '';
+        return nr;
+      });
+      await clearAndWrite('AmazonOrders!A1', [header, ...updated]);
+      console.log(`Updated ${existingRowIdxs.length} existing rows for ${orderNumber}`);
+
+    } else {
+      // No existing rows — insert new rows from shipment email
+      console.log(`No existing order found for ${orderNumber} — inserting from shipment`);
+      const newRows = shipmentItems.map(item => [
+        orderNumber, orderDate, 'order', '',
+        item.name, item.listPrice, 0, item.totalPrice,
+        '', 'shipped', '', item.imageUrl || '',
+      ]);
+      for (const row of newRows) {
+        await appendAtFirstEmptyRow('AmazonOrders', [row]);
+      }
+    }
+  } catch(e) {
+    console.error('handleShipment error:', e.message);
+    console.error(e.stack);
+  }
+}
 function extractTax(text) {
   const patterns = [
     /estimated tax[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
@@ -417,6 +622,40 @@ async function processMessage(gmail, msgId) {
         requestBody: { removeLabelIds: ['UNREAD'] },
       });
       console.log(`Marked message ${msgId} as read`);
+    } catch(e) { console.error('Mark as read error:', e.message); }
+
+  } else if (emailType === 'shipment') {
+    // Extract both HTML and plain text for best parsing results
+    let htmlBody = '', plainBody = '';
+    const extractBoth = (part) => {
+      if (part.mimeType === 'text/plain' && part.body?.data)
+        plainBody += Buffer.from(part.body.data, 'base64').toString('utf8');
+      if (part.mimeType === 'text/html' && part.body?.data)
+        htmlBody += Buffer.from(part.body.data, 'base64').toString('utf8');
+      (part.parts || []).forEach(extractBoth);
+    };
+    extractBoth(msg.data.payload);
+
+    // Find all order numbers in this shipment email
+    const allOrderNums = [...new Set(
+      [...(plainBody + htmlBody + ' ' + subject).matchAll(/([0-9]{3}-[0-9]{7}-[0-9]{7})/g)].map(m => m[1])
+    )];
+    console.log(`Shipment email — orders: ${allOrderNums.join(', ')}`);
+
+    const shipmentItems = extractShipmentItems(htmlBody, plainBody);
+
+    for (const num of allOrderNums) {
+      await handleShipment(num, shipmentItems, orderDate);
+    }
+
+    // Mark as read after processing
+    try {
+      await gmail.users.messages.modify({
+        userId: process.env.GMAIL_ADDRESS,
+        id: msgId,
+        requestBody: { removeLabelIds: ['UNREAD'] },
+      });
+      console.log(`Marked shipment message ${msgId} as read`);
     } catch(e) { console.error('Mark as read error:', e.message); }
   }
 }
