@@ -1,5 +1,5 @@
 const { google } = require('googleapis');
-const { appendRange, readRange, clearAndWrite } = require('./_sheets');
+const { appendAtFirstEmptyRow, readRange, clearAndWrite } = require('./_sheets');
 
 function getGmailAuth() {
   const oauth2Client = new google.auth.OAuth2(
@@ -218,7 +218,7 @@ async function writeOrderToSheet(orderNumber, orderDate, emailType, items, order
   ]);
   console.log(`Writing ${rows.length} rows to AmazonOrders for order ${orderNumber}`);
   try {
-    await appendRange('AmazonOrders!A:K', rows);
+    await appendAtFirstEmptyRow('AmazonOrders', rows);
     console.log(`Successfully wrote ${rows.length} items for order ${orderNumber}`);
   } catch(e) {
     console.error('writeOrderToSheet error:', e.message);
@@ -275,7 +275,7 @@ async function handleReturn(orderNumber, returnedItems, bodyText, subject) {
         '', item.name, item.listPrice || 0, item.taxShare || 0, item.totalPrice || 0,
         '', 'returned', 'no_matching_order',
       ]);
-      await appendRange('AmazonOrders!A:K', returnRows);
+      await appendAtFirstEmptyRow('AmazonOrders', returnRows);
       console.log(`Logged ${returnRows.length} return items (no matching order found)`);
     }
   } catch(e) {

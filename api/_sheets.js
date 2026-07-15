@@ -95,10 +95,20 @@ async function clearAndWrite(range, values) {
   }
 }
 
+// Append rows at the first empty row based on column A — avoids Google's
+// unreliable table detection which can offset writes to wrong columns/rows
+async function appendAtFirstEmptyRow(tabName, rows) {
+  const colA = await readRange(`${tabName}!A:A`);
+  const nextRow = colA.length + 1;
+  await writeRange(`${tabName}!A${nextRow}`, rows);
+  return nextRow;
+}
+
 module.exports = {
   readRange,
   writeRange,
   appendRange,
+  appendAtFirstEmptyRow,
   clearAndWrite,
   getStoredAccessToken,
   storeAccessToken,

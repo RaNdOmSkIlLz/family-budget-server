@@ -1,7 +1,7 @@
 // Manual trigger — mark emails as unread in givensbudget@gmail.com first
 // Then hit: GET https://family-budget-server.vercel.app/api/reprocess-amazon
 const { google } = require('googleapis');
-const { appendRange, readRange } = require('./_sheets');
+const { appendAtFirstEmptyRow, readRange } = require('./_sheets');
 
 function getGmailAuth() {
   const oauth2Client = new google.auth.OAuth2(
@@ -48,8 +48,24 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    const force = (req.url || '').includes('force=1');
     const auth = getGmailAuth();
     const gmail = google.gmail({ version: 'v1', auth });
+
+    // Diagnostic: what does the server see in AmazonOrders right now?
+    let sheetDiagnostic = {};
+    try {
+      const existingAll = await readRange('AmazonOrders!A:K');
+      sheetDiagnostic = {
+        sheetIdPrefix: (process.env.BUDGET_SHEET_ID || '').substring(0, 12) + '...',
+        totalRows: existingAll.length,
+        headerRow: existingAll[0] || null,
+        orderNumbersInSheet: existingAll.slice(1).map(r => r[0]).filter(Boolean),
+        lastRow: existingAll[existingAll.length - 1] || null,
+      };
+    } catch(e) {
+      sheetDiagnostic = { error: 'Could not read AmazonOrders tab: ' + e.message };
+    }
 
     // Search broadly — all recent emails, we filter by content below
     const searchRes = await gmail.users.messages.list({
@@ -124,15 +140,9 @@ module.exports = async (req, res) => {
           continue;
         }
 
-        if (existingOrders.has(orderNumber)) {
-          console.log(`Order ${orderNumber} already in sheet — skipping`);
-          results.push({ subject, orderNumber, status: 'already in sheet' });
-          // Mark as read since already processed
-          await gmail.users.messages.modify({
-            userId: process.env.GMAIL_ADDRESS,
-            id: msg.id,
-            requestBody: { removeLabelIds: ['UNREAD'] },
-          });
+        if (existingOrders.has(orderNumber) && !force) {
+          console.log(`Order ${orderNumber} already in sheet — skipping (use ?force=1 to rewrite)`);
+          results.push({ subject, orderNumber, status: 'already in sheet (use ?force=1 to rewrite)' });
           continue;
         }
 
@@ -154,7 +164,7 @@ module.exports = async (req, res) => {
           '', 'pending', '',
         ]];
 
-        await appendRange('AmazonOrders!A:K', rows);
+        await appendAtFirstEmptyRow('AmazonOrders', rows);
         existingOrders.add(orderNumber);
         console.log(`Wrote order ${orderNumber}: ${itemName} $${orderTotal}`);
 
@@ -175,6 +185,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       success: true,
       processed: results.filter(r => r.status === 'written to sheet').length,
+      sheetDiagnostic,
       results,
     });
   } catch(e) {
