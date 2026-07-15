@@ -15,28 +15,32 @@ function getGmailAuth() {
 function detectEmailType(from, subject, bodyText) {
   const f = (from || '').toLowerCase();
   const s = (subject || '').toLowerCase();
-  const b = (bodyText || '').toLowerCase().substring(0, 2000); // check first 2000 chars
+  const b = (bodyText || '').toLowerCase().substring(0, 5000);
 
-  // Check if body contains Amazon sender (handles forwarded emails)
-  const bodyHasAmazon = b.includes('auto-confirm@amazon.com') ||
-    b.includes('amazon.com/gp/css/order') ||
-    b.includes('amazon.com order') ||
+  // Direct from Amazon
+  if (f.includes('auto-confirm@amazon.com')) return 'order';
+  if (f.includes('return@amazon.com') || f.includes('refund@amazon.com')) return 'return';
+
+  // Subject patterns (covers forwarded emails where subject is preserved)
+  if (s.includes('your amazon.com order') || s.includes('amazon.com order #')) return 'order';
+  if (s.includes('return request confirmed') || s.includes('refund') && s.includes('amazon')) return 'return';
+
+  // Body content — check for Amazon order confirmation markers
+  const bodyHasOrderConfirm =
+    b.includes('auto-confirm@amazon.com') ||
+    b.includes('order confirmation') ||
     b.includes('your amazon.com order') ||
-    b.includes('order confirmation') && b.includes('amazon');
+    b.includes('amazon.com/gp/css/order') ||
+    b.includes('amazon.com/your-orders') ||
+    (b.includes('amazon') && b.includes('order total') && b.includes('items ordered'));
 
-  const isOrder = f.includes('auto-confirm@amazon.com') ||
-    s.includes('your amazon.com order') ||
-    s.includes('order confirmation') ||
-    (s.includes('fwd') && bodyHasAmazon) ||
-    (s.includes('fw:') && bodyHasAmazon) ||
-    bodyHasAmazon;
+  const bodyHasReturn =
+    b.includes('return request') ||
+    (b.includes('amazon') && b.includes('refund'));
 
-  const isReturn = f.includes('return@amazon.com') ||
-    s.includes('return') && (f.includes('amazon') || bodyHasAmazon) ||
-    s.includes('refund') && (f.includes('amazon') || bodyHasAmazon);
+  if (bodyHasReturn) return 'return';
+  if (bodyHasOrderConfirm) return 'order';
 
-  if (isReturn) return 'return';
-  if (isOrder) return 'order';
   return null;
 }
 
@@ -77,29 +81,116 @@ function extractTax(text) {
 // ── ITEM EXTRACTION ───────────────────────────────────────────────────────────
 function extractItems(text) {
   const items = [];
-  const cleaned = text
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#[0-9]+;/g, ' ')
-    .replace(/\s+/g, ' ');
 
-  const lines = cleaned.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 3);
-  lines.forEach(line => {
-    if (/^(shipping|handling|estimated tax|sales tax|tax|total|subtotal|discount|promotion|gift card|order|items|qty|quantity|sold by|condition)/i.test(line)) return;
-    const priceMatch = line.match(/\$([0-9]+\.[0-9]{2})/);
-    if (priceMatch) {
-      const price = parseFloat(priceMatch[1]);
-      const name = line.replace(/\$[0-9]+\.[0-9]{2}.*/, '').trim().replace(/^[-•*\s]+/, '');
-      if (price > 0.50 && price < 2000 && name.length > 5 && name.length < 150) {
+  // ── Strategy 1: Plain text section (most reliable) ──
+  // Amazon plain text format:
+  //   "⁦1⁩ Tires item"  or  "Item Name\n$XX.XX"
+  // Strip quoted-printable encoding artifacts first
+  const plain = text
+    .replace(/=\r?\n/g, '')          // QP soft line breaks
+    .replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '') // Unicode directional chars
+    .replace(/&zwnj;|&nbsp;|&#[0-9]+;|&[a-z]+;/gi, ' ');
+
+  // Strategy 1a: Look for "Qty Item Name $Price" patterns in plain text
+  const qtyItemPrice = /(\d+)\s+(.{3,80}?)\s+\$([0-9]+\.[0-9]{2})/gm;
+  let m;
+  while ((m = qtyItemPrice.exec(plain)) !== null) {
+    const qty = parseInt(m[1]);
+    const name = m[2].trim();
+    const price = parseFloat(m[3]);
+    if (price > 0 && price < 5000 && name.length > 2 && !name.match(/total|shipping|tax|order|subtotal/i)) {
+      for (let q = 0; q < Math.min(qty, 10); q++) {
         items.push({name: name.substring(0, 100), listPrice: price});
       }
     }
+  }
+
+  if (items.length) return dedupItems(items);
+
+  // Strategy 1b: Look for HTML product cells — Amazon uses specific class names
+  // Pattern: productImage alt="item name" near a price
+  const productImageAlt = /alt=["']([^"']{5,100})["'][^>]*class=["'][^"']*productImage/gi;
+  const productPrices = [];
+
+  // Extract all prices from the HTML
+  const priceMatches = [...text.matchAll(/\$([0-9]+\.[0-9]{2})/g)];
+  priceMatches.forEach(pm => {
+    const p = parseFloat(pm[1]);
+    if (p > 0.50 && p < 2000) productPrices.push(p);
   });
 
-  // Deduplicate by name
+  // Extract item names from product image alt text
+  const imgNames = [];
+  let imgM;
+  while ((imgM = productImageAlt.exec(text)) !== null) {
+    const name = imgM[1].trim();
+    if (name && !name.match(/Completed|Pending|Amazon|logo|banner/i)) {
+      imgNames.push(name);
+    }
+  }
+
+  // Also look for span content near "rio-text" classes that has item descriptions
+  // Pattern: <span class="rio-text ...">item name</span>
+  const rioTextSpan = /<span[^>]+class=["'][^"']*rio-text[^"']*["'][^>]*>([^<]{5,100})<\/span>/gi;
+  let rtM;
+  while ((rtM = rioTextSpan.exec(text)) !== null) {
+    const content = rtM[1].trim()
+      .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
+      .replace(/^[\d\s⁦⁩]+/, '') // strip leading qty chars
+      .trim();
+    // Filter out navigation/shipping status text
+    if (content.length > 4 && content.length < 150 &&
+        !content.match(/^(Ordered|Shipped|Delivered|Out for|Arriving|Your Orders|Your Account|Buy Again|Thanks|Order #|Mattie|Grand Total|View or|Privacy|Conditions|Amazon\.com)/i)) {
+      imgNames.push(content);
+    }
+  }
+
+  // De-dup names
+  const uniqueNames = [...new Set(imgNames)].filter(n => n.length > 3);
+
+  if (uniqueNames.length > 0) {
+    // If we have prices matching the count, pair them
+    uniqueNames.forEach((name, idx) => {
+      const price = productPrices[idx] || 0;
+      items.push({name: name.substring(0, 100), listPrice: price});
+    });
+    if (items.length) return dedupItems(items);
+  }
+
+  // Strategy 2: Plain text line-by-line scan for item + price pairs
+  const lines = plain.split(/[\r\n]+/).map(l => l.trim()).filter(l => l);
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    // Skip obvious non-item lines
+    if (/^(grand total|order total|subtotal|shipping|tax|estimated|your orders|your account|buy again|thanks|arriving|ordered|shipped|delivered|out for|view or|privacy|conditions|amazon\.com|©|\$0\.00)/i.test(line)) continue;
+    // Look for standalone price on next line after an item name
+    const nextLine = lines[li + 1] || '';
+    const priceNext = nextLine.match(/^\$([0-9]+\.[0-9]{2})$/);
+    const priceInline = line.match(/\$([0-9]+\.[0-9]{2})$/);
+
+    if (priceNext && line.length > 4 && line.length < 150) {
+      items.push({name: line.substring(0, 100), listPrice: parseFloat(priceNext[1])});
+      li++; // skip price line
+    } else if (priceInline) {
+      const name = line.replace(/\$[0-9]+\.[0-9]{2}$/, '').trim();
+      if (name.length > 4 && !name.match(/total|shipping|tax|order/i)) {
+        items.push({name: name.substring(0, 100), listPrice: parseFloat(priceInline[1])});
+      }
+    }
+  }
+
+  return dedupItems(items);
+}
+
+function dedupItems(items) {
   const seen = new Set();
-  return items.filter(i => { if (seen.has(i.name)) return false; seen.add(i.name); return true; });
+  return items.filter(i => {
+    const key = i.name.substring(0, 30);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // ── PROPORTIONAL TAX SPLIT ────────────────────────────────────────────────────
@@ -254,6 +345,15 @@ async function processMessage(gmail, msgId) {
     const items = extractItems(bodyText);
     const tax = extractTax(bodyText);
     const orderTotal = extractOrderTotal(bodyText);
+
+    // Extract item description from subject or body for single-item fallback
+    // Amazon subject format: "Ordered: ⁦1⁩ Tires item" → "Tires item"
+    const subjectItem = subject
+      .replace(/^ordered:\s*/i, '')
+      .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
+      .replace(/^\d+\s+/, '') // strip leading quantity
+      .trim();
+
     const itemsWithTax = applyTaxProportionally(items, tax);
     const itemsTotal = parseFloat(itemsWithTax.reduce((s, i) => s + (i.totalPrice || i.listPrice), 0).toFixed(2));
     const mismatch = orderTotal && Math.abs(orderTotal - itemsTotal) > 0.02
@@ -262,10 +362,21 @@ async function processMessage(gmail, msgId) {
 
     if (mismatch) console.log(`Mismatch for ${orderNumber}: order=$${orderTotal}, items=$${itemsTotal}, delta=$${mismatch}`);
 
-    const finalItems = items.length ? itemsWithTax : [{
-      name: '[Items not parsed — check email]',
-      listPrice: orderTotal || 0, taxShare: 0, totalPrice: orderTotal || 0
-    }];
+    let finalItems;
+    if (items.length && !mismatch) {
+      finalItems = itemsWithTax;
+    } else {
+      // No line-item prices in this email type (common for Amazon "Ordered" emails)
+      // Write a single item using the subject description and full order total
+      const itemName = subjectItem.length > 3 ? subjectItem : '[Item — see order]';
+      finalItems = [{
+        name: itemName,
+        listPrice: orderTotal || 0,
+        taxShare: 0,
+        totalPrice: orderTotal || 0,
+      }];
+      console.log(`No item prices parsed — using single item: "${itemName}" $${orderTotal}`);
+    }
 
     await writeOrderToSheet(orderNumber, orderDate, 'order', finalItems, orderTotal, mismatch || '');
 
@@ -339,10 +450,12 @@ module.exports = async (req, res) => {
     } catch(e) { console.error('Diagnostic search error:', e.message); }
 
     // Always also run search as safety net — catches anything history missed
+    // Search broadly for any Amazon-related email, not just direct from Amazon
+    // since forwarded emails come from the user's main Gmail address
     try {
       const searchRes = await gmail.users.messages.list({
         userId: process.env.GMAIL_ADDRESS,
-        q: 'from:(auto-confirm@amazon.com OR return@amazon.com OR refund@amazon.com) newer_than:1d',
+        q: '(from:(auto-confirm@amazon.com OR return@amazon.com OR refund@amazon.com) OR subject:("Your Amazon.com order" OR "order confirmation" OR "Return request")) newer_than:1d',
         maxResults: 10,
       });
       const searchIds = (searchRes.data.messages || []).map(m => m.id);
@@ -350,6 +463,20 @@ module.exports = async (req, res) => {
       searchIds.forEach(id => { if (!messageIds.includes(id)) messageIds.push(id); });
     } catch(searchErr) {
       console.error('Search error:', searchErr.message);
+    }
+
+    // Also search for ANY unread email as final fallback — body check will filter
+    try {
+      const unreadRes = await gmail.users.messages.list({
+        userId: process.env.GMAIL_ADDRESS,
+        q: 'is:unread newer_than:1d',
+        maxResults: 10,
+      });
+      const unreadIds = (unreadRes.data.messages || []).map(m => m.id);
+      console.log(`Found ${unreadIds.length} unread messages`);
+      unreadIds.forEach(id => { if (!messageIds.includes(id)) messageIds.push(id); });
+    } catch(e) {
+      console.error('Unread search error:', e.message);
     }
 
     // Verify messages exist and are accessible before processing
@@ -367,13 +494,21 @@ module.exports = async (req, res) => {
         const from = headers.find(h => h.name === 'From')?.value || '';
         const subject = headers.find(h => h.name === 'Subject')?.value || '';
         console.log(`Message ${msgId}: from="${from}" subject="${subject}"`);
-        // Only process Amazon emails — pass empty body since we only have metadata here
-        // Full body check happens in processMessage
-        if (detectEmailType(from, subject, '') || subject.toLowerCase().includes('fwd') || subject.toLowerCase().includes('fw:')) {
+        // Queue for processing if it looks Amazon-related at metadata level
+        // OR if it's unread (body check in processMessage will filter non-Amazon)
+        const mightBeAmazon =
+          detectEmailType(from, subject, '') ||
+          subject.toLowerCase().includes('amazon') ||
+          subject.toLowerCase().includes('fwd:') ||
+          subject.toLowerCase().includes('fw:') ||
+          subject.toLowerCase().includes('order') ||
+          from.toLowerCase().includes('amazon');
+
+        if (mightBeAmazon) {
           verifiedIds.push(msgId);
           console.log(`Queued for processing: ${subject}`);
         } else {
-          console.log(`Skipping non-Amazon message: ${subject}`);
+          console.log(`Skipping: ${subject}`);
         }
       } catch(e) {
         console.log(`Message ${msgId} not accessible: ${e.message}`);
