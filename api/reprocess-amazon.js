@@ -133,49 +133,58 @@ module.exports = async (req, res) => {
         };
         extractBody(full.data.payload);
 
-        const orderNumber = extractOrderNumber(bodyText + ' ' + subject);
-        if (!orderNumber) {
-          console.log(`No order number found in: ${subject}`);
+        // Find ALL order numbers in this email (Amazon sometimes combines multiple orders)
+        const allOrderNums = [...new Set(
+          [...(bodyText + ' ' + subject).matchAll(/([0-9]{3}-[0-9]{7}-[0-9]{7})/g)].map(m => m[1])
+        )];
+        console.log(`Found orders: ${allOrderNums.join(', ')}`);
+
+        if (!allOrderNums.length) {
           results.push({ subject, status: 'skipped — no order number' });
           continue;
         }
 
-        if (existingOrders.has(orderNumber) && !force) {
-          console.log(`Order ${orderNumber} already in sheet — skipping (use ?force=1 to rewrite)`);
-          results.push({ subject, orderNumber, status: 'already in sheet (use ?force=1 to rewrite)' });
-          continue;
-        }
+        const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
-        const orderTotal = extractOrderTotal(bodyText);
-        const orderDate  = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        // Extract all grand totals — one per order
+        const totalPattern = /grand total[:\s]*\$?\s*([0-9,]+\.[0-9]{2})/gi;
+        const allTotals = [...bodyText.matchAll(totalPattern)].map(m => parseFloat(m[1].replace(/,/g, '')));
+        console.log(`Found totals: ${allTotals.join(', ')}`);
 
-        // Build item name from subject
         const itemName = subject
           .replace(/^ordered:\s*/i, '')
           .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
           .replace(/^\d+\s+/, '')
           .trim() || '[Item — see order]';
 
-        const emailType = isReturn ? 'return' : 'order';
-        const rows = [[
-          orderNumber, orderDate, emailType,
-          '', itemName,
-          orderTotal || 0, 0, orderTotal || 0,
-          '', 'pending', '',
-        ]];
+        for (let oi = 0; oi < allOrderNums.length; oi++) {
+          const num = allOrderNums[oi];
+          const total = allTotals[oi] !== undefined ? allTotals[oi] : (allTotals[0] || null);
 
-        await appendAtFirstEmptyRow('AmazonOrders', rows);
-        existingOrders.add(orderNumber);
-        console.log(`Wrote order ${orderNumber}: ${itemName} $${orderTotal}`);
+          if (existingOrders.has(num) && !force) {
+            results.push({ subject, orderNumber: num, status: 'already in sheet (use ?force=1 to rewrite)' });
+            continue;
+          }
 
-        // Mark as read
+          const rows = [[
+            num, orderDate, isReturn ? 'return' : 'order',
+            '', itemName,
+            total || 0, 0, total || 0,
+            '', 'pending', '',
+          ]];
+
+          await appendAtFirstEmptyRow('AmazonOrders', rows);
+          existingOrders.add(num);
+          console.log(`Wrote order ${num}: ${itemName} $${total}`);
+          results.push({ subject, orderNumber: num, total, status: 'written to sheet' });
+        }
+
+        // Mark as read after all orders from this email processed
         await gmail.users.messages.modify({
           userId: process.env.GMAIL_ADDRESS,
           id: msg.id,
           requestBody: { removeLabelIds: ['UNREAD'] },
         });
-
-        results.push({ subject, orderNumber, total: orderTotal, status: 'written to sheet' });
       } catch(e) {
         console.error(`Error processing message ${msg.id}:`, e.message);
         results.push({ id: msg.id, status: 'error: ' + e.message });

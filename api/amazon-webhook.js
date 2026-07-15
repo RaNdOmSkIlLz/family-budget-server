@@ -331,52 +331,57 @@ async function processMessage(gmail, msgId) {
   const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
   if (emailType === 'order') {
-    // Check for duplicate order number before writing
+    // Find ALL order numbers in this email (Amazon sometimes combines multiple orders)
+    const allOrderNumbers = [...new Set(
+      [...(bodyText + ' ' + subject).matchAll(/([0-9]{3}-[0-9]{7}-[0-9]{7})/g)].map(m => m[1])
+    )];
+    console.log(`Found ${allOrderNumbers.length} order number(s): ${allOrderNumbers.join(', ')}`);
+
+    // Check which are already in sheet
+    let existingOrders = new Set();
     try {
       const existing = await readRange('AmazonOrders!A:A');
-      const existingOrders = existing.slice(1).map(r => r[0]);
-      if (orderNumber && existingOrders.includes(orderNumber)) {
-        console.log(`Order ${orderNumber} already in sheet — skipping`);
-        // Mark as read since already processed
-        await gmail.users.messages.modify({
-          userId: process.env.GMAIL_ADDRESS,
-          id: msgId,
-          requestBody: { removeLabelIds: ['UNREAD'] },
-        });
-        return;
-      }
+      existing.slice(1).forEach(r => { if (r[0]) existingOrders.add(r[0]); });
     } catch(e) { console.error('Dedup check error:', e.message); }
 
-    const items = extractItems(bodyText);
-    const tax = extractTax(bodyText);
-    const orderTotal = extractOrderTotal(bodyText);
+    // Extract all grand totals — one per order
+    // Amazon format: "Grand Total:\n$XX.XX" or "Grand Total: $XX.XX"
+    const totalPattern = /grand total[:\s]*\$?\s*([0-9,]+\.[0-9]{2})/gi;
+    const allTotals = [...bodyText.matchAll(totalPattern)].map(m => parseFloat(m[1].replace(/,/g, '')));
+    console.log(`Found ${allTotals.length} total(s): ${allTotals.join(', ')}`);
 
-    const subjectItem = subject
+    // Build subject item name(s)
+    const subjectBase = subject
       .replace(/^ordered:\s*/i, '')
       .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
       .replace(/^\d+\s+/, '')
       .trim();
 
-    const itemsWithTax = applyTaxProportionally(items, tax);
-    const itemsTotal = parseFloat(itemsWithTax.reduce((s, i) => s + (i.totalPrice || i.listPrice), 0).toFixed(2));
-    const mismatch = orderTotal && Math.abs(orderTotal - itemsTotal) > 0.02
-      ? parseFloat(Math.abs(orderTotal - itemsTotal).toFixed(2))
-      : null;
+    // Pair each order number with a total
+    // If counts match — pair 1:1. If not — use first total for all or split evenly.
+    for (let oi = 0; oi < allOrderNumbers.length; oi++) {
+      const num = allOrderNumbers[oi];
 
-    if (mismatch) console.log(`Mismatch for ${orderNumber}: order=$${orderTotal}, items=$${itemsTotal}, delta=$${mismatch}`);
+      if (existingOrders.has(num)) {
+        console.log(`Order ${num} already in sheet — skipping`);
+        continue;
+      }
 
-    let finalItems;
-    if (items.length && !mismatch) {
-      finalItems = itemsWithTax;
-    } else {
-      const itemName = subjectItem.length > 3 ? subjectItem : '[Item — see order]';
-      finalItems = [{ name: itemName, listPrice: orderTotal || 0, taxShare: 0, totalPrice: orderTotal || 0 }];
-      console.log(`No item prices parsed — using single item: "${itemName}" $${orderTotal}`);
+      const total = allTotals[oi] || allTotals[0] || null;
+      const itemName = subjectBase || '[Item — see order]';
+
+      const finalItems = [{
+        name: itemName,
+        listPrice: total || 0,
+        taxShare: 0,
+        totalPrice: total || 0,
+      }];
+
+      console.log(`Writing order ${num}: "${itemName}" $${total}`);
+      await writeOrderToSheet(num, orderDate, 'order', finalItems, total, '');
     }
 
-    await writeOrderToSheet(orderNumber, orderDate, 'order', finalItems, orderTotal, mismatch || '');
-
-    // Mark as read AFTER successful write
+    // Mark as read after all orders processed
     try {
       await gmail.users.messages.modify({
         userId: process.env.GMAIL_ADDRESS,
