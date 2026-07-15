@@ -1,0 +1,184 @@
+// Manual trigger — mark emails as unread in givensbudget@gmail.com first
+// Then hit: GET https://family-budget-server.vercel.app/api/reprocess-amazon
+const { google } = require('googleapis');
+const { appendRange, readRange } = require('./_sheets');
+
+function getGmailAuth() {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  );
+  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+  return oauth2Client;
+}
+
+function decodeSubject(raw) {
+  return raw.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, enc, encoded) => {
+    try {
+      return enc.toUpperCase() === 'B'
+        ? Buffer.from(encoded, 'base64').toString('utf8')
+        : encoded.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (__, h) => String.fromCharCode(parseInt(h, 16)));
+    } catch(e) { return raw; }
+  });
+}
+
+function extractOrderNumber(text) {
+  const m = text.match(/([0-9]{3}-[0-9]{7}-[0-9]{7})/);
+  return m ? m[1] : null;
+}
+
+function extractOrderTotal(text) {
+  const patterns = [
+    /order total[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
+    /grand total[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
+    /total[:\s]*\$([0-9,]+\.[0-9]{2})/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return parseFloat(m[1].replace(/,/g, ''));
+  }
+  return null;
+}
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  try {
+    const auth = getGmailAuth();
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    // Find unread Amazon emails
+    const searchRes = await gmail.users.messages.list({
+      userId: process.env.GMAIL_ADDRESS,
+      q: 'is:unread newer_than:30d',
+      maxResults: 20,
+    });
+
+    const messages = searchRes.data.messages || [];
+    console.log(`Found ${messages.length} unread emails`);
+
+    if (!messages.length) {
+      return res.status(200).json({
+        success: true,
+        message: 'No unread emails found. Mark Amazon order emails as unread in givensbudget@gmail.com first.',
+        processed: 0,
+      });
+    }
+
+    // Load existing order numbers to avoid dupes
+    let existingOrders = new Set();
+    try {
+      const existing = await readRange('AmazonOrders!A:A');
+      existing.slice(1).forEach(r => { if (r[0]) existingOrders.add(r[0]); });
+    } catch(e) { console.log('Could not read existing orders:', e.message); }
+
+    const results = [];
+
+    for (const msg of messages) {
+      try {
+        // Get full message
+        const full = await gmail.users.messages.get({
+          userId: process.env.GMAIL_ADDRESS,
+          id: msg.id,
+          format: 'full',
+        });
+
+        const headers = full.data.payload?.headers || [];
+        const from    = headers.find(h => h.name === 'From')?.value || '';
+        const rawSubj = headers.find(h => h.name === 'Subject')?.value || '';
+        const date    = headers.find(h => h.name === 'Date')?.value || '';
+        const subject = decodeSubject(rawSubj);
+
+        // Only process Amazon emails
+        const isAmazon = from.toLowerCase().includes('amazon.com') ||
+                         subject.toLowerCase().includes('amazon') ||
+                         subject.toLowerCase().includes('ordered:');
+        if (!isAmazon) {
+          console.log(`Skipping non-Amazon: ${subject}`);
+          continue;
+        }
+
+        const isReturn = from.includes('return@amazon.com') ||
+                         subject.toLowerCase().includes('return request');
+
+        // Extract body
+        let bodyText = '';
+        const extractBody = (part) => {
+          if (part.mimeType === 'text/plain' && part.body?.data) {
+            bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
+          } else if (part.mimeType === 'text/html' && part.body?.data && !bodyText) {
+            bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
+          }
+          (part.parts || []).forEach(extractBody);
+        };
+        extractBody(full.data.payload);
+
+        const orderNumber = extractOrderNumber(bodyText + ' ' + subject);
+        if (!orderNumber) {
+          console.log(`No order number found in: ${subject}`);
+          results.push({ subject, status: 'skipped — no order number' });
+          continue;
+        }
+
+        if (existingOrders.has(orderNumber)) {
+          console.log(`Order ${orderNumber} already in sheet — skipping`);
+          results.push({ subject, orderNumber, status: 'already in sheet' });
+          // Mark as read since already processed
+          await gmail.users.messages.modify({
+            userId: process.env.GMAIL_ADDRESS,
+            id: msg.id,
+            requestBody: { removeLabelIds: ['UNREAD'] },
+          });
+          continue;
+        }
+
+        const orderTotal = extractOrderTotal(bodyText);
+        const orderDate  = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+        // Build item name from subject
+        const itemName = subject
+          .replace(/^ordered:\s*/i, '')
+          .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
+          .replace(/^\d+\s+/, '')
+          .trim() || '[Item — see order]';
+
+        const emailType = isReturn ? 'return' : 'order';
+        const rows = [[
+          orderNumber, orderDate, emailType,
+          '', itemName,
+          orderTotal || 0, 0, orderTotal || 0,
+          '', 'pending', '',
+        ]];
+
+        await appendRange('AmazonOrders!A:K', rows);
+        existingOrders.add(orderNumber);
+        console.log(`Wrote order ${orderNumber}: ${itemName} $${orderTotal}`);
+
+        // Mark as read
+        await gmail.users.messages.modify({
+          userId: process.env.GMAIL_ADDRESS,
+          id: msg.id,
+          requestBody: { removeLabelIds: ['UNREAD'] },
+        });
+
+        results.push({ subject, orderNumber, total: orderTotal, status: 'written to sheet' });
+      } catch(e) {
+        console.error(`Error processing message ${msg.id}:`, e.message);
+        results.push({ id: msg.id, status: 'error: ' + e.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      processed: results.filter(r => r.status === 'written to sheet').length,
+      results,
+    });
+  } catch(e) {
+    console.error('Reprocess error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+};
