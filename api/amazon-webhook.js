@@ -330,18 +330,6 @@ async function processMessage(gmail, msgId) {
 
   const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
-  // Mark as read IMMEDIATELY to prevent reprocessing on next webhook fire
-  try {
-    await gmail.users.messages.modify({
-      userId: process.env.GMAIL_ADDRESS,
-      id: msgId,
-      requestBody: { removeLabelIds: ['UNREAD'] },
-    });
-    console.log(`Marked message ${msgId} as read`);
-  } catch(e) {
-    console.error('Mark as read error:', e.message);
-  }
-
   if (emailType === 'order') {
     // Check for duplicate order number before writing
     try {
@@ -349,6 +337,12 @@ async function processMessage(gmail, msgId) {
       const existingOrders = existing.slice(1).map(r => r[0]);
       if (orderNumber && existingOrders.includes(orderNumber)) {
         console.log(`Order ${orderNumber} already in sheet — skipping`);
+        // Mark as read since already processed
+        await gmail.users.messages.modify({
+          userId: process.env.GMAIL_ADDRESS,
+          id: msgId,
+          requestBody: { removeLabelIds: ['UNREAD'] },
+        });
         return;
       }
     } catch(e) { console.error('Dedup check error:', e.message); }
@@ -357,12 +351,10 @@ async function processMessage(gmail, msgId) {
     const tax = extractTax(bodyText);
     const orderTotal = extractOrderTotal(bodyText);
 
-    // Extract item description from subject or body for single-item fallback
-    // Amazon subject format: "Ordered: ⁦1⁩ Tires item" → "Tires item"
     const subjectItem = subject
       .replace(/^ordered:\s*/i, '')
       .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
-      .replace(/^\d+\s+/, '') // strip leading quantity
+      .replace(/^\d+\s+/, '')
       .trim();
 
     const itemsWithTax = applyTaxProportionally(items, tax);
@@ -377,33 +369,50 @@ async function processMessage(gmail, msgId) {
     if (items.length && !mismatch) {
       finalItems = itemsWithTax;
     } else {
-      // No line-item prices in this email type (common for Amazon "Ordered" emails)
-      // Write a single item using the subject description and full order total
       const itemName = subjectItem.length > 3 ? subjectItem : '[Item — see order]';
-      finalItems = [{
-        name: itemName,
-        listPrice: orderTotal || 0,
-        taxShare: 0,
-        totalPrice: orderTotal || 0,
-      }];
+      finalItems = [{ name: itemName, listPrice: orderTotal || 0, taxShare: 0, totalPrice: orderTotal || 0 }];
       console.log(`No item prices parsed — using single item: "${itemName}" $${orderTotal}`);
     }
 
     await writeOrderToSheet(orderNumber, orderDate, 'order', finalItems, orderTotal, mismatch || '');
 
+    // Mark as read AFTER successful write
+    try {
+      await gmail.users.messages.modify({
+        userId: process.env.GMAIL_ADDRESS,
+        id: msgId,
+        requestBody: { removeLabelIds: ['UNREAD'] },
+      });
+      console.log(`Marked message ${msgId} as read`);
+    } catch(e) { console.error('Mark as read error:', e.message); }
+
   } else if (emailType === 'return' || emailType === 'refund') {
-    // Check for duplicate return before writing
     try {
       const existing = await readRange('AmazonOrders!A:C');
       const alreadyLogged = existing.slice(1).some(r => r[0] === orderNumber && r[2] === 'return');
       if (alreadyLogged) {
         console.log(`Return for ${orderNumber} already logged — skipping`);
+        await gmail.users.messages.modify({
+          userId: process.env.GMAIL_ADDRESS,
+          id: msgId,
+          requestBody: { removeLabelIds: ['UNREAD'] },
+        });
         return;
       }
     } catch(e) { console.error('Return dedup check error:', e.message); }
 
     const returnedItems = extractItems(bodyText);
     await handleReturn(orderNumber, returnedItems, bodyText, subject);
+
+    // Mark as read after processing
+    try {
+      await gmail.users.messages.modify({
+        userId: process.env.GMAIL_ADDRESS,
+        id: msgId,
+        requestBody: { removeLabelIds: ['UNREAD'] },
+      });
+      console.log(`Marked message ${msgId} as read`);
+    } catch(e) { console.error('Mark as read error:', e.message); }
   }
 }
 

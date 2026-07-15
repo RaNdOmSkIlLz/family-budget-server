@@ -51,20 +51,20 @@ module.exports = async (req, res) => {
     const auth = getGmailAuth();
     const gmail = google.gmail({ version: 'v1', auth });
 
-    // Find unread Amazon emails
+    // Search broadly — all recent emails, we filter by content below
     const searchRes = await gmail.users.messages.list({
       userId: process.env.GMAIL_ADDRESS,
-      q: 'is:unread newer_than:30d',
+      q: 'newer_than:7d',
       maxResults: 20,
     });
 
     const messages = searchRes.data.messages || [];
-    console.log(`Found ${messages.length} unread emails`);
+    console.log(`Found ${messages.length} recent emails (last 7 days)`);
 
     if (!messages.length) {
       return res.status(200).json({
         success: true,
-        message: 'No unread emails found. Mark Amazon order emails as unread in givensbudget@gmail.com first.',
+        message: 'No emails found in the last 7 days in givensbudget@gmail.com.',
         processed: 0,
       });
     }
