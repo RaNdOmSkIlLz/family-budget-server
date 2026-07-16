@@ -20,6 +20,8 @@ module.exports = async (req, res) => {
         balResponse.data.accounts.forEach(acct => {
           allAccounts.push({
             institution,
+            accountId: acct.account_id,
+            mask: acct.mask,
             name: acct.name,
             officialName: acct.official_name,
             type: acct.type,

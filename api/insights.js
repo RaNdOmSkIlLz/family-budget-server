@@ -7,11 +7,14 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({error: 'Use POST'});
 
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({error: 'ANTHROPIC_API_KEY not configured on server'});
+
   const {systemPrompt, userPrompt} = req.body || {};
   if (!systemPrompt || !userPrompt) return res.status(400).json({error: 'Missing prompts'});
 
   try {
-    const client = new Anthropic({apiKey: process.env.ANTHROPIC_API_KEY});
+    const client = new Anthropic({apiKey});
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1000,
