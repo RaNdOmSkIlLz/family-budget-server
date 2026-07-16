@@ -28,6 +28,16 @@ function extractOrderNumber(text) {
   return m ? m[1] : null;
 }
 
+// Same fix as amazon-webhook.js — Gmail returns raw MIME bytes without decoding
+// quoted-printable encoding, which can split content like an order number
+// across a soft line break and make it invisible to a simple regex match.
+function decodeQuotedPrintable(text) {
+  if (!text) return text;
+  return text
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
 function extractOrderTotal(text) {
   const patterns = [
     /order total[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
@@ -118,8 +128,10 @@ module.exports = async (req, res) => {
           continue;
         }
 
-        const isReturn = from.includes('return@amazon.com') ||
-                         subject.toLowerCase().includes('return request');
+        const isReturn = from.includes('return@amazon.com') || from.includes('refund@amazon.com') ||
+                         subject.toLowerCase().includes('return request') ||
+                         subject.toLowerCase().includes('refund') ||
+                         subject.toLowerCase().includes('returned');
 
         // Extract body
         let bodyText = '';
@@ -132,6 +144,7 @@ module.exports = async (req, res) => {
           (part.parts || []).forEach(extractBody);
         };
         extractBody(full.data.payload);
+        bodyText = decodeQuotedPrintable(bodyText);
 
         // Find ALL order numbers in this email (Amazon sometimes combines multiple orders)
         const allOrderNums = [...new Set(
@@ -139,10 +152,15 @@ module.exports = async (req, res) => {
         )];
         console.log(`Found orders: ${allOrderNums.join(', ')}`);
 
-        if (!allOrderNums.length) {
+        // Order confirmations without a parseable order number aren't very
+        // actionable, so those are still skipped. Returns/refunds are different —
+        // they often don't restate the order number in the same format, so give
+        // them a stable fallback identifier instead of dropping them entirely.
+        if (!allOrderNums.length && !isReturn) {
           results.push({ subject, status: 'skipped — no order number' });
           continue;
         }
+        const effectiveOrderNums = allOrderNums.length ? allOrderNums : ['REFUND-' + subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 24)];
 
         const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
@@ -157,8 +175,8 @@ module.exports = async (req, res) => {
           .replace(/^\d+\s+/, '')
           .trim() || '[Item — see order]';
 
-        for (let oi = 0; oi < allOrderNums.length; oi++) {
-          const num = allOrderNums[oi];
+        for (let oi = 0; oi < effectiveOrderNums.length; oi++) {
+          const num = effectiveOrderNums[oi];
           const total = allTotals[oi] !== undefined ? allTotals[oi] : (allTotals[0] || null);
 
           if (existingOrders.has(num) && !force) {
@@ -170,7 +188,7 @@ module.exports = async (req, res) => {
             num, orderDate, isReturn ? 'return' : 'order',
             '', itemName,
             total || 0, 0, total || 0,
-            '', 'pending', '',
+            '', isReturn ? 'returned' : 'pending', isReturn && !allOrderNums.length ? 'no_matching_order' : '',
           ]];
 
           await appendAtFirstEmptyRow('AmazonOrders', rows);

@@ -25,7 +25,10 @@ function detectEmailType(from, subject, bodyText) {
   // Subject patterns
   if (s.includes('shipped:') || s.includes('your package was shipped') || s.includes('out for delivery') || s.includes('delivered')) return 'shipment';
   if (s.includes('your amazon.com order') || s.includes('amazon.com order #') || s.includes('ordered:')) return 'order';
-  if (s.includes('return request confirmed') || (s.includes('refund') && s.includes('amazon'))) return 'return';
+  // This inbox only ever receives emails already filtered to Amazon senders
+  // upstream (via the Gmail forwarding rule), so a subject just needs to look
+  // like a refund/return — it doesn't need to also literally spell out "amazon".
+  if (s.includes('return request confirmed') || s.includes('refund') || s.includes('return request') || s.includes('returned')) return 'return';
 
   // Body content
   const bodyHasShipment =
@@ -50,6 +53,19 @@ function detectEmailType(from, subject, bodyText) {
   if (bodyHasOrderConfirm) return 'order';
 
   return null;
+}
+
+// Decodes MIME quoted-printable encoding (=3D -> "=", soft line breaks removed).
+// Gmail's API returns each message part's raw bytes but does NOT decode the
+// original Content-Transfer-Encoding — HTML emails (especially forwarded ones)
+// are very often quoted-printable, so without this, text is riddled with "=3D"
+// artifacts and can have real content (like an order number) split mid-string
+// by a soft line break, breaking any regex that expects it on one clean line.
+function decodeQuotedPrintable(text) {
+  if (!text) return text;
+  return text
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
 
 // ── ORDER NUMBER EXTRACTION ───────────────────────────────────────────────────
@@ -526,12 +542,24 @@ async function processMessage(gmail, msgId) {
     (part.parts || []).forEach(extractBody);
   };
   extractBody(msg.data.payload);
+  bodyText = decodeQuotedPrintable(bodyText);
 
   const emailType = detectEmailType(from, subject, bodyText);
   if (!emailType) { console.log('Not an Amazon receipt, skipping'); return; }
 
   const orderNumber = extractOrderNumber(bodyText + ' ' + subject);
-  if (!orderNumber) { console.log('Could not extract order number from:', subject); return; }
+  // Order confirmations genuinely need an order number to be useful — but
+  // refund/return emails often don't restate the order number in the same
+  // XXX-XXXXXXX-XXXXXXX format order confirmations use. Previously ANY email
+  // missing that exact pattern was dropped silently here, before ever reaching
+  // handleReturn()'s fallback that logs a standalone, reviewable row even
+  // without a matched order — which is very likely why refunds were vanishing
+  // entirely instead of showing up (even as an unmatched entry) in the sheet.
+  if (!orderNumber && emailType !== 'return' && emailType !== 'refund') {
+    console.log('Could not extract order number from:', subject);
+    return;
+  }
+  if (!orderNumber) console.log('No order number found for return/refund email — will log as standalone entry:', subject);
 
   const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
@@ -597,11 +625,15 @@ async function processMessage(gmail, msgId) {
     } catch(e) { console.error('Mark as read error:', e.message); }
 
   } else if (emailType === 'return' || emailType === 'refund') {
+    // Refund emails that don't restate a real order number still need a stable,
+    // dedupable identifier — otherwise re-processing the same email could log
+    // it twice. Derive one from the subject line instead.
+    const dedupKey = orderNumber || ('REFUND-' + subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 24));
     try {
       const existing = await readRange('AmazonOrders!A:C');
-      const alreadyLogged = existing.slice(1).some(r => r[0] === orderNumber && r[2] === 'return');
+      const alreadyLogged = existing.slice(1).some(r => r[0] === dedupKey && r[2] === 'return');
       if (alreadyLogged) {
-        console.log(`Return for ${orderNumber} already logged — skipping`);
+        console.log(`Return for ${dedupKey} already logged — skipping`);
         await gmail.users.messages.modify({
           userId: process.env.GMAIL_ADDRESS,
           id: msgId,
@@ -612,7 +644,7 @@ async function processMessage(gmail, msgId) {
     } catch(e) { console.error('Return dedup check error:', e.message); }
 
     const returnedItems = extractItems(bodyText);
-    await handleReturn(orderNumber, returnedItems, bodyText, subject);
+    await handleReturn(orderNumber || dedupKey, returnedItems, bodyText, subject);
 
     // Mark as read after processing
     try {
@@ -635,6 +667,8 @@ async function processMessage(gmail, msgId) {
       (part.parts || []).forEach(extractBoth);
     };
     extractBoth(msg.data.payload);
+    htmlBody = decodeQuotedPrintable(htmlBody);
+    plainBody = decodeQuotedPrintable(plainBody);
 
     // Find all order numbers in this shipment email
     const allOrderNums = [...new Set(
