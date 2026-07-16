@@ -2,6 +2,7 @@
 // Then hit: GET https://family-budget-server.vercel.app/api/reprocess-amazon
 const { google } = require('googleapis');
 const { appendAtFirstEmptyRow, readRange } = require('./_sheets');
+const { decodeQuotedPrintable, decodeSubject, extractOrderNumber, extractOrderTotal } = require('./amazon-parsing');
 
 function getGmailAuth() {
   const oauth2Client = new google.auth.OAuth2(
@@ -11,44 +12,6 @@ function getGmailAuth() {
   );
   oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
   return oauth2Client;
-}
-
-function decodeSubject(raw) {
-  return raw.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, enc, encoded) => {
-    try {
-      return enc.toUpperCase() === 'B'
-        ? Buffer.from(encoded, 'base64').toString('utf8')
-        : encoded.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (__, h) => String.fromCharCode(parseInt(h, 16)));
-    } catch(e) { return raw; }
-  });
-}
-
-function extractOrderNumber(text) {
-  const m = text.match(/([0-9]{3}-[0-9]{7}-[0-9]{7})/);
-  return m ? m[1] : null;
-}
-
-// Same fix as amazon-webhook.js — Gmail returns raw MIME bytes without decoding
-// quoted-printable encoding, which can split content like an order number
-// across a soft line break and make it invisible to a simple regex match.
-function decodeQuotedPrintable(text) {
-  if (!text) return text;
-  return text
-    .replace(/=\r?\n/g, '')
-    .replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
-}
-
-function extractOrderTotal(text) {
-  const patterns = [
-    /order total[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
-    /grand total[:\s]*\$?([0-9,]+\.[0-9]{2})/i,
-    /total[:\s]*\$([0-9,]+\.[0-9]{2})/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return parseFloat(m[1].replace(/,/g, ''));
-  }
-  return null;
 }
 
 module.exports = async (req, res) => {
@@ -165,7 +128,7 @@ module.exports = async (req, res) => {
         const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
         // Extract all grand totals — one per order
-        const totalPattern = /grand total[:\s]*\$?\s*([0-9,]+\.[0-9]{2})/gi;
+        const totalPattern = /grand total[:\s]*\$?\s*([0-9,]+\.[0-9]{1,2})/gi;
         const allTotals = [...bodyText.matchAll(totalPattern)].map(m => parseFloat(m[1].replace(/,/g, '')));
         console.log(`Found totals: ${allTotals.join(', ')}`);
 
