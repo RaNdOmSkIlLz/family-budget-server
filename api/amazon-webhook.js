@@ -713,13 +713,17 @@ module.exports = async (req, res) => {
       (allRes.data.messages || []).forEach(m => console.log('  msg id:', m.id));
     } catch(e) { console.error('Diagnostic search error:', e.message); }
 
-    // Always also run search as safety net — catches anything history missed
-    // Search broadly for any Amazon-related email, not just direct from Amazon
-    // since forwarded emails come from the user's main Gmail address
+    // Always also run search as safety net — catches anything history missed.
+    // IMPORTANT: scoped to is:unread. Every processed message gets marked read
+    // at the end of processMessage() — without this filter, this search would
+    // keep re-finding the same already-handled emails on every single webhook
+    // trigger (which fires on ANY new email in the inbox, not just Amazon ones),
+    // reprocessing them over and over throughout the day. That was the actual
+    // cause of the sheet ending up with far more rows than real emails.
     try {
       const searchRes = await gmail.users.messages.list({
         userId: process.env.GMAIL_ADDRESS,
-        q: '(from:(auto-confirm@amazon.com OR return@amazon.com OR refund@amazon.com) OR subject:("Your Amazon.com order" OR "order confirmation" OR "Return request")) newer_than:1d',
+        q: 'is:unread (from:(auto-confirm@amazon.com OR return@amazon.com OR refund@amazon.com) OR subject:("Your Amazon.com order" OR "order confirmation" OR "Return request")) newer_than:1d',
         maxResults: 10,
       });
       const searchIds = (searchRes.data.messages || []).map(m => m.id);
