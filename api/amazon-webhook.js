@@ -627,3 +627,11 @@ module.exports = async (req, res) => {
     res.status(200).end(); // Always ACK
   }
 };
+
+// Exposed so reprocess-amazon.js can call the EXACT same processing logic the
+// live webhook uses (tax distribution, per-order-block parsing, image
+// extraction, stage-aware returns) instead of maintaining a second, separately
+// drifting implementation — which is exactly what caused the earlier bugs to
+// exist in one tool and not the other.
+module.exports.processMessage = processMessage;
+module.exports.getGmailAuth = getGmailAuth;

@@ -1,17 +1,63 @@
-// Manual trigger — mark emails as unread in givensbudget@gmail.com first
-// Then hit: GET https://family-budget-server.vercel.app/api/reprocess-amazon
+// Manual trigger for reprocessing Amazon emails — calls the EXACT same
+// processMessage() the live webhook uses (tax distribution, per-order-block
+// parsing, image extraction, stage-aware returns), so results always match
+// what amazon-webhook.js would have produced.
+//
+// Supports scoping a rebuild to only orders placed on/after a given date —
+// this matters because a return/shipment email can arrive weeks after its
+// original order, so a simple "only search recent emails" filter isn't
+// enough to exclude an old order's return. Instead this does two passes:
+//   1. Peek every candidate email (cheap — no writes) to find which order
+//      numbers actually belong to an 'order' email dated on/after `since`.
+//   2. Only fully process (write to the sheet) emails whose order number is
+//      in that in-scope set — anything belonging to an older, excluded
+//      order is skipped even if the email itself arrived recently.
+//
+// Usage:
+//   GET /api/reprocess-amazon?since=2026-07-01           — only orders from this date on
+//   GET /api/reprocess-amazon?since=2026-07-01&days=120  — how far back to search for candidate emails
+//   GET /api/reprocess-amazon?limit=15                    — batch size per call
+//   GET /api/reprocess-amazon?since=...&pageToken=XXXX    — continue a previous run
+//
+// For a full rebuild scoped to recent orders: clear the AmazonOrders tab
+// first (manually, in Google Sheets), then call this repeatedly with the
+// same `since` value and the returned nextPageToken, until "hasMore: false".
 const { google } = require('googleapis');
-const { appendAtFirstEmptyRow, readRange } = require('./_sheets');
-const { decodeQuotedPrintable, decodeSubject, extractOrderNumber, extractOrderTotal } = require('./amazon-parsing');
+const { readRange } = require('./_sheets');
+const { processMessage, getGmailAuth } = require('./amazon-webhook');
+const { decodeQuotedPrintable, decodeSubject, detectEmailType, extractOrderNumber } = require('./amazon-parsing');
 
-function getGmailAuth() {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-  );
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-  return oauth2Client;
+async function peekMessage(gmail, msgId) {
+  const full = await gmail.users.messages.get({
+    userId: process.env.GMAIL_ADDRESS,
+    id: msgId,
+    format: 'full',
+  });
+  const headers = full.data.payload?.headers || [];
+  const from = headers.find(h => h.name === 'From')?.value || '';
+  const rawSubj = headers.find(h => h.name === 'Subject')?.value || '';
+  const dateHeader = headers.find(h => h.name === 'Date')?.value || '';
+  const subject = decodeSubject(rawSubj);
+
+  let bodyText = '';
+  const extractBody = (part) => {
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
+    } else if (part.mimeType === 'text/html' && part.body?.data && !bodyText) {
+      bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
+    }
+    (part.parts || []).forEach(extractBody);
+  };
+  extractBody(full.data.payload);
+  bodyText = decodeQuotedPrintable(bodyText);
+
+  const emailType = detectEmailType(from, subject, bodyText);
+  const allOrderNumbers = [...new Set(
+    [...(bodyText + ' ' + subject).matchAll(/([0-9]{3}-[0-9]{7}-[0-9]{7})/g)].map(m => m[1])
+  )];
+  const emailDate = dateHeader ? new Date(dateHeader) : null;
+
+  return { emailType, allOrderNumbers, emailDate, subject };
 }
 
 module.exports = async (req, res) => {
@@ -21,160 +67,98 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const force = (req.url || '').includes('force=1');
+    const url = new URL(req.url, 'http://x');
+    const sinceParam = url.searchParams.get('since'); // e.g. 2026-07-01
+    const since = sinceParam ? new Date(sinceParam + 'T00:00:00') : null;
+    const days = parseInt(url.searchParams.get('days') || '120', 10);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '15', 10), 50);
+    const pageToken = url.searchParams.get('pageToken') || undefined;
+
     const auth = getGmailAuth();
     const gmail = google.gmail({ version: 'v1', auth });
 
-    // Diagnostic: what does the server see in AmazonOrders right now?
     let sheetDiagnostic = {};
     try {
       const existingAll = await readRange('AmazonOrders!A:K');
       sheetDiagnostic = {
-        sheetIdPrefix: (process.env.BUDGET_SHEET_ID || '').substring(0, 12) + '...',
         totalRows: existingAll.length,
-        headerRow: existingAll[0] || null,
-        orderNumbersInSheet: existingAll.slice(1).map(r => r[0]).filter(Boolean),
-        lastRow: existingAll[existingAll.length - 1] || null,
+        distinctOrderNumbers: [...new Set(existingAll.slice(1).map(r => r[0]).filter(Boolean))].length,
       };
     } catch(e) {
       sheetDiagnostic = { error: 'Could not read AmazonOrders tab: ' + e.message };
     }
 
-    // Search broadly — all recent emails, we filter by content below
     const searchRes = await gmail.users.messages.list({
       userId: process.env.GMAIL_ADDRESS,
-      q: 'newer_than:7d',
-      maxResults: 20,
+      q: `(from:(amazon.com) OR subject:(amazon OR "ordered:" OR "shipped:" OR "delivered:")) newer_than:${days}d`,
+      maxResults: limit,
+      pageToken,
     });
 
     const messages = searchRes.data.messages || [];
-    console.log(`Found ${messages.length} recent emails (last 7 days)`);
+    const nextPageToken = searchRes.data.nextPageToken || null;
 
     if (!messages.length) {
       return res.status(200).json({
-        success: true,
-        message: 'No emails found in the last 7 days in givensbudget@gmail.com.',
-        processed: 0,
+        success: true, message: `No emails found in the last ${days} days.`,
+        processed: 0, hasMore: false, sheetDiagnostic,
       });
     }
 
-    // Load existing order numbers to avoid dupes
-    let existingOrders = new Set();
-    try {
-      const existing = await readRange('AmazonOrders!A:A');
-      existing.slice(1).forEach(r => { if (r[0]) existingOrders.add(r[0]); });
-    } catch(e) { console.log('Could not read existing orders:', e.message); }
-
-    const results = [];
-
+    // Pass 1: peek every message in this batch (no writes yet)
+    const peeked = [];
     for (const msg of messages) {
       try {
-        // Get full message
-        const full = await gmail.users.messages.get({
-          userId: process.env.GMAIL_ADDRESS,
-          id: msg.id,
-          format: 'full',
-        });
-
-        const headers = full.data.payload?.headers || [];
-        const from    = headers.find(h => h.name === 'From')?.value || '';
-        const rawSubj = headers.find(h => h.name === 'Subject')?.value || '';
-        const date    = headers.find(h => h.name === 'Date')?.value || '';
-        const subject = decodeSubject(rawSubj);
-
-        // Only process Amazon emails
-        const isAmazon = from.toLowerCase().includes('amazon.com') ||
-                         subject.toLowerCase().includes('amazon') ||
-                         subject.toLowerCase().includes('ordered:');
-        if (!isAmazon) {
-          console.log(`Skipping non-Amazon: ${subject}`);
-          continue;
-        }
-
-        const isReturn = from.includes('return@amazon.com') || from.includes('refund@amazon.com') ||
-                         subject.toLowerCase().includes('return request') ||
-                         subject.toLowerCase().includes('refund') ||
-                         subject.toLowerCase().includes('returned');
-
-        // Extract body
-        let bodyText = '';
-        const extractBody = (part) => {
-          if (part.mimeType === 'text/plain' && part.body?.data) {
-            bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
-          } else if (part.mimeType === 'text/html' && part.body?.data && !bodyText) {
-            bodyText += Buffer.from(part.body.data, 'base64').toString('utf8');
-          }
-          (part.parts || []).forEach(extractBody);
-        };
-        extractBody(full.data.payload);
-        bodyText = decodeQuotedPrintable(bodyText);
-
-        // Find ALL order numbers in this email (Amazon sometimes combines multiple orders)
-        const allOrderNums = [...new Set(
-          [...(bodyText + ' ' + subject).matchAll(/([0-9]{3}-[0-9]{7}-[0-9]{7})/g)].map(m => m[1])
-        )];
-        console.log(`Found orders: ${allOrderNums.join(', ')}`);
-
-        // Order confirmations without a parseable order number aren't very
-        // actionable, so those are still skipped. Returns/refunds are different —
-        // they often don't restate the order number in the same format, so give
-        // them a stable fallback identifier instead of dropping them entirely.
-        if (!allOrderNums.length && !isReturn) {
-          results.push({ subject, status: 'skipped — no order number' });
-          continue;
-        }
-        const effectiveOrderNums = allOrderNums.length ? allOrderNums : ['REFUND-' + subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 24)];
-
-        const orderDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-
-        // Extract all grand totals — one per order
-        const totalPattern = /grand total[:\s]*\$?\s*([0-9,]+\.[0-9]{1,2})/gi;
-        const allTotals = [...bodyText.matchAll(totalPattern)].map(m => parseFloat(m[1].replace(/,/g, '')));
-        console.log(`Found totals: ${allTotals.join(', ')}`);
-
-        const itemName = subject
-          .replace(/^ordered:\s*/i, '')
-          .replace(/[\u2066\u2069\u200B-\u200F\u202A-\u202E]/g, '')
-          .replace(/^\d+\s+/, '')
-          .trim() || '[Item — see order]';
-
-        for (let oi = 0; oi < effectiveOrderNums.length; oi++) {
-          const num = effectiveOrderNums[oi];
-          const total = allTotals[oi] !== undefined ? allTotals[oi] : (allTotals[0] || null);
-
-          if (existingOrders.has(num) && !force) {
-            results.push({ subject, orderNumber: num, status: 'already in sheet (use ?force=1 to rewrite)' });
-            continue;
-          }
-
-          const rows = [[
-            num, orderDate, isReturn ? 'return' : 'order',
-            '', itemName,
-            total || 0, 0, total || 0,
-            '', isReturn ? 'returned' : 'pending', isReturn && !allOrderNums.length ? 'no_matching_order' : '',
-          ]];
-
-          await appendAtFirstEmptyRow('AmazonOrders', rows);
-          existingOrders.add(num);
-          console.log(`Wrote order ${num}: ${itemName} $${total}`);
-          results.push({ subject, orderNumber: num, total, status: 'written to sheet' });
-        }
-
-        // Mark as read after all orders from this email processed
-        await gmail.users.messages.modify({
-          userId: process.env.GMAIL_ADDRESS,
-          id: msg.id,
-          requestBody: { removeLabelIds: ['UNREAD'] },
-        });
+        const info = await peekMessage(gmail, msg.id);
+        peeked.push({ id: msg.id, ...info });
       } catch(e) {
-        console.error(`Error processing message ${msg.id}:`, e.message);
-        results.push({ id: msg.id, status: 'error: ' + e.message });
+        peeked.push({ id: msg.id, error: e.message });
+      }
+    }
+
+    // Build the in-scope order-number set from 'order' emails dated on/after `since`
+    const inScopeOrders = new Set();
+    if (since) {
+      peeked.forEach(p => {
+        if (p.emailType === 'order' && p.emailDate && p.emailDate >= since) {
+          p.allOrderNumbers.forEach(n => inScopeOrders.add(n));
+        }
+      });
+    }
+
+    // Pass 2: only fully process (write) messages that qualify
+    const results = [];
+    for (const p of peeked) {
+      if (p.error) { results.push({ id: p.id, status: 'error: ' + p.error }); continue; }
+      if (!p.emailType) { results.push({ id: p.id, subject: p.subject, status: 'skipped — not an Amazon email' }); continue; }
+
+      if (since) {
+        const isOrderInWindow = p.emailType === 'order' && p.emailDate && p.emailDate >= since;
+        const belongsToInScopeOrder = p.allOrderNumbers.some(n => inScopeOrders.has(n));
+        if (!isOrderInWindow && !belongsToInScopeOrder) {
+          results.push({ id: p.id, subject: p.subject, orderNumbers: p.allOrderNumbers, status: `skipped — order predates ${sinceParam}` });
+          continue;
+        }
+      }
+
+      try {
+        await processMessage(gmail, p.id);
+        results.push({ id: p.id, subject: p.subject, orderNumbers: p.allOrderNumbers, status: 'processed' });
+      } catch(e) {
+        results.push({ id: p.id, subject: p.subject, status: 'error: ' + e.message });
       }
     }
 
     return res.status(200).json({
       success: true,
-      processed: results.filter(r => r.status === 'written to sheet').length,
+      since: sinceParam || '(no filter — all orders in range)',
+      inScopeOrderCount: since ? inScopeOrders.size : null,
+      inScopeOrders: since ? [...inScopeOrders] : null,
+      processed: results.filter(r => r.status === 'processed').length,
+      skipped: results.filter(r => r.status.startsWith('skipped')).length,
+      errors: results.filter(r => r.status.startsWith('error')).length,
+      hasMore: !!nextPageToken,
+      nextPageToken,
       sheetDiagnostic,
       results,
     });
