@@ -338,16 +338,22 @@ async function processMessage(gmail, msgId) {
 
       if (block) {
         total = block.total;
-        finalItems = block.items.map(it => ({
-          name: it.name,
-          listPrice: it.listPrice,
-          taxShare: 0,
-          totalPrice: it.listPrice,
-        }));
-        console.log(`Writing order ${num}: ${finalItems.length} item(s) from parsed block, $${total}`);
+        // Distribute the gap between the Grand Total and the raw item sum as
+        // tax, proportionally by item price. Without this, the sum of
+        // TotalPrice never equals the real charged amount (Grand Total
+        // already includes tax), which broke matchAmazonOrders' Plaid
+        // transaction matching in the main app — it requires the two to
+        // agree within 2 cents, and tax alone was routinely $0.50-$5+.
+        const rawItems = block.items.map(it => ({ name: it.name, listPrice: it.listPrice }));
+        const itemSum = rawItems.reduce((s, it) => s + it.listPrice, 0);
+        const tax = Math.max(0, parseFloat((total - itemSum).toFixed(2)));
+        finalItems = applyTaxProportionally(rawItems, tax);
+        console.log(`Writing order ${num}: ${finalItems.length} item(s) from parsed block, items=$${itemSum.toFixed(2)} + tax=$${tax.toFixed(2)} = $${total}`);
       } else {
         // Fallback: couldn't parse this order's own items — use the old
         // subject-derived single-line approach so nothing gets dropped.
+        // Only one line item here, so it already equals the full total —
+        // no separate tax split needed.
         total = allTotals[oi] || allTotals[0] || null;
         const itemName = subjectBase || '[Item — see order]';
         finalItems = [{
