@@ -23,6 +23,7 @@
 // first (manually, in Google Sheets), then call this repeatedly with the
 // same `since` value and the returned nextPageToken, until "hasMore: false".
 const { google } = require('googleapis');
+const requireAppSecret = require('./_auth');
 const { readRange } = require('./_sheets');
 const { processMessage, getGmailAuth } = require('./amazon-webhook');
 const { decodeQuotedPrintable, decodeSubject, detectEmailType, extractOrderNumber } = require('./amazon-parsing');
@@ -63,8 +64,9 @@ async function peekMessage(gmail, msgId) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-App-Secret');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (!requireAppSecret(req, res)) return;
 
   try {
     const url = new URL(req.url, 'http://x');

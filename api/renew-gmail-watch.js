@@ -1,5 +1,6 @@
 // Called weekly by Vercel cron to renew the Gmail watch (expires every 7 days)
 const { google } = require('googleapis');
+const requireCronSecret = require('./_cronAuth');
 
 function getGmailAuth() {
   const oauth2Client = new google.auth.OAuth2(
@@ -14,6 +15,7 @@ function getGmailAuth() {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (!requireCronSecret(req, res)) return;
 
   try {
     const auth = getGmailAuth();

@@ -1,10 +1,12 @@
 const { client } = require('./_plaidClient');
+const requireAppSecret = require('./_auth');
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-App-Secret');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (!requireAppSecret(req, res)) return;
 
   try {
     const response = await client.linkTokenCreate({
